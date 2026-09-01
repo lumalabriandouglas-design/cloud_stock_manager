@@ -1,126 +1,88 @@
 # Cloud Stock Manager
 
-A multi-tenant inventory & stock management system built with Django.
-Designed for small-to-medium businesses (especially in Uganda – UGX currency).
-
-You (the platform owner) can host this for **many different businesses**.  
-Each business gets its own isolated data.
-
----
-
-## Roles & Permissions
-
-| Role                    | Who is this?                          | What they can do                                      |
-|-------------------------|---------------------------------------|-------------------------------------------------------|
-| **Platform Admin**      | You (superuser)                       | Full access via `/admin/`. Create/delete any company, any user, view everything across all businesses. |
-| **Company Owner**       | The person who creates a company      | Full control **inside their own company only**: add products, record sales, scan ledgers, manage stock. |
-| **Company Staff**       | Future – employees of a company       | Currently same as Owner (we can restrict later).      |
-
-### Important rules for you as Platform Admin
-
-- You create the Django superuser (`createsuperuser`).
-- You can log into `/admin/` and see **all** companies and data.
-- Normal business owners **cannot** access `/admin/` unless you give them staff/superuser status (you should almost never do this).
-- Business owners only see their own company’s data on the main dashboard.
-- When a new user signs up and has no company yet, they are taken to a simple “Create your company” page and automatically become the **Owner** of that company.
-
----
-
-## Quick Start
-
-### 1. Clone & Setup
-
-```bash
-git clone https://github.com/lumalabriandouglas-design/cloud_stock_manager.git
-cd cloud_stock_manager
-
-python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 2. Environment variables
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```env
-SECRET_KEY=your-very-long-random-secret-key-here
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-GEMINI_API_KEY=your-google-gemini-api-key   # optional but needed for ledger scanning
-```
-
-### 3. Database
-
-```bash
-python manage.py migrate
-python manage.py createsuperuser
-```
-
-### 4. Run
-
-```bash
-python manage.py runserver
-```
-
-### 5. First login flow
-
-1. Go to http://127.0.0.1:8000/
-2. Log in with the superuser (or any user you create).
-3. You will be taken to **“Create your company”** page.
-4. Enter a business name → you become the Owner and land on the dashboard.
-
-(You can still use `/admin/` at any time as Platform Admin.)
-
----
+Multi-tenant cloud inventory / stock management system for small businesses.
 
 ## Features
 
-- Multi-company isolation (each user belongs to one company)
-- Product / Category management
-- Stock In & Sales recording
-- Low stock alerts
-- Today's sales & inventory value dashboard
-- **AI Ledger Scanner** – upload a photo of a handwritten stock book and Gemini extracts the items
-- Clean Tailwind CSS dashboard
-- First-time company setup flow
+- Multi-company isolation
+- Owner-controlled staff permissions
+- Stock in / sales / categories
+- AI handwritten ledger scanner (Gemini)
+- Sales reports + CSV export
+- Low-stock alerts (dashboard + optional email)
+- Clean professional UI
 
----
+## Local development
 
-## Project Structure
-
-```
-cloud_stock_manager/
-├── core/                 # Django project settings & urls
-├── inventory/            # Main app
-│   ├── models.py
-│   ├── views.py
-│   ├── admin.py
-│   ├── templates/
-│   └── migrations/
-├── manage.py
-├── requirements.txt
-├── .env.example
-└── README.md
+```bash
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env       # edit SECRET_KEY etc.
+python manage.py migrate
+python manage.py createsuperuser   # optional platform admin
+python manage.py runserver
 ```
 
+Open http://127.0.0.1:8000/
+
+- Register a new business at `/register/`
+- Or login and create a company at `/setup/`
+
+## Deploy on Railway
+
+### 1. Create project
+
+1. Go to [railway.app](https://railway.app) and sign in with GitHub
+2. **New Project** → **Deploy from GitHub repo** → select `cloud_stock_manager`
+3. Railway will detect Python and start building
+
+### 2. Add PostgreSQL
+
+1. In the project → **New** → **Database** → **PostgreSQL**
+2. Railway automatically sets `DATABASE_URL` for your web service
+
+### 3. Environment variables
+
+In the **web service** → **Variables**, add:
+
+| Variable | Value |
+|----------|--------|
+| `SECRET_KEY` | Generate a long random string (e.g. `python -c "import secrets; print(secrets.token_urlsafe(50))"`) |
+| `DEBUG` | `False` |
+| `ALLOWED_HOSTS` | `.railway.app` (or your custom domain later) |
+| `GEMINI_API_KEY` | (optional) your Google AI key for the scanner |
+
+`DATABASE_URL` is injected automatically by the PostgreSQL plugin — do **not** set it manually.
+
+### 4. Deploy commands
+
+Railway usually auto-detects Django. If needed, set:
+
+- **Build Command**: `pip install -r requirements.txt && python manage.py collectstatic --noinput`
+- **Start Command**: `gunicorn core.wsgi --log-file -`
+
+Or rely on the `Procfile`.
+
+### 5. Run migrations
+
+After the first deploy, open the service → **Settings** or use Railway CLI / one-off command:
+
+```bash
+railway run python manage.py migrate
+railway run python manage.py createsuperuser
+```
+
+(Or add a release command in Railway that runs `python manage.py migrate`.)
+
+### 6. Done
+
+Open the public Railway URL. Register a business or login as superuser and use Platform Admin to create businesses.
+
 ---
 
-## Production Notes
+## Notes
 
-- Set `DEBUG=False`
-- Use a strong `SECRET_KEY`
-- Set proper `ALLOWED_HOSTS`
-- Switch to PostgreSQL
-- Collect static files
-- Put the app behind HTTPS
-
----
-
-## License
-
-MIT
+- **Media files** (ledger photos) are stored on the local disk. On Railway the filesystem is ephemeral — for production AI scans you should later move media to S3/Cloudinary. For MVP it is acceptable.
+- **Email**: set `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` when you want real low-stock emails.
+- Locally the app still uses SQLite if `DATABASE_URL` is not set.
