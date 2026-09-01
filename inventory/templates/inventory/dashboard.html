@@ -26,7 +26,12 @@
             <div class="flex items-center space-x-3">
                 <span class="text-slate-400 text-sm hidden sm:inline">{{ request.user.username }}</span>
                 <a href="/admin/" class="text-xs text-slate-300 hover:text-white bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700 transition">Admin</a>
-                <a href="{% url 'logout' %}" class="text-xs text-rose-300 hover:text-white bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700 transition">Logout</a>
+                <form action="{% url 'logout' %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="text-xs text-rose-300 hover:text-white bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700 transition">
+                        Logout
+                    </button>
+                </form>
             </div>
         </div>
     </header>
