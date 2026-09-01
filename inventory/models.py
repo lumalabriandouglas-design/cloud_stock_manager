@@ -69,6 +69,12 @@ class Item(models.Model):
     def __str__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        # Normalize name: strip + title-case for consistency
+        if self.name:
+            self.name = " ".join(self.name.strip().split()).title()
+        super().save(*args, **kwargs)
+
 
 class Sale(models.Model):
     company = models.ForeignKey(
@@ -81,6 +87,18 @@ class Sale(models.Model):
 
     def __str__(self):
         return f"{self.quantity_sold}x {self.item.name} - {self.company.name}"
+
+    @property
+    def line_total(self):
+        return self.quantity_sold * self.sell_price
+
+    @property
+    def estimated_cost(self):
+        return self.quantity_sold * self.item.buy_price
+
+    @property
+    def estimated_profit(self):
+        return self.line_total - self.estimated_cost
 
 
 class StockIn(models.Model):
