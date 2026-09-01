@@ -1,20 +1,16 @@
 import csv
 import json
 import os
-import uuid
 
-import requests
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.db.models import F, Q, Sum
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from google import genai
 from google.genai import types
@@ -62,7 +58,6 @@ def require_perm(perm_name):
 
 
 def require_active_sub(view_func):
-    """Block write actions when subscription is not active."""
     def wrapper(request, *args, **kwargs):
         company = get_user_company(request)
         if company and not company.is_subscription_active():
@@ -105,13 +100,30 @@ def notify_low_stock(company, item):
         return
     subject = f"[{company.name}] Low stock: {item.name}"
     body = (
-        f"Item: {item.name}\n"
-        f"Current stock: {item.quantity_in_stock}\n"
-        f"Reorder level: {item.reorder_level}\n\n"
-        f"Please restock soon.\n\n— Cloud Stock Manager"
+        f"Item: {item.name}\nCurrent stock: {item.quantity_in_stock}\n"
+        f"Reorder level: {item.reorder_level}\n\nPlease restock soon.\n\n— Cloud Stock Manager"
     )
     try:
         send_mail(subject, body, None, emails, fail_silently=True)
+    except Exception:
+        pass
+
+
+def notify_admin_payment_claim(company, sub):
+    admin_email = os.getenv("PAYMENT_NOTIFY_EMAIL", "")
+    if not admin_email:
+        return
+    subject = f"[Payment claim] {company.name} – UGX {Subscription.PLAN_AMOUNT_UGX:,}"
+    body = (
+        f"Company: {company.name}\n"
+        f"Phone: {sub.payment_phone or '—'}\n"
+        f"Tx ID: {sub.payment_tx_id or '—'}\n"
+        f"Note: {sub.payment_note or '—'}\n"
+        f"Claimed at: {sub.payment_claimed_at}\n\n"
+        f"Activate from Platform Admin when you confirm the MoMo deposit.\n"
+    )
+    try:
+        send_mail(subject, body, None, [admin_email], fail_silently=True)
     except Exception:
         pass
 
@@ -254,7 +266,7 @@ def dashboard(request):
     return render(request, "inventory/dashboard.html", context)
 
 
-# ───────────────────────────── Billing ─────────────────────────────
+# ───────────────────────────── Billing (manual MoMo) ─────────────────────────────
 
 @login_required
 def billing(request):
@@ -278,123 +290,26 @@ def billing(request):
 
 @login_required
 @require_POST
-def initiate_payment(request):
+def claim_payment(request):
     profile = get_profile(request)
     if profile is None or not profile.is_owner:
-        messages.error(request, "Only the business owner can pay.")
+        messages.error(request, "Only the business owner can submit a payment claim.")
         return redirect("billing")
 
     company = profile.company
     sub = company.subscription or Subscription.start_trial(company)
 
-    secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
-    if not secret:
-        messages.error(request, "Payment is not configured yet. Contact support.")
-        return redirect("billing")
+    phone = request.POST.get("payment_phone", "").strip()
+    tx_id = request.POST.get("payment_tx_id", "").strip()
+    note = request.POST.get("payment_note", "").strip()
 
-    tx_ref = f"csm-{company.id}-{uuid.uuid4().hex[:12]}"
-    sub.flutterwave_tx_ref = tx_ref
-    sub.save(update_fields=["flutterwave_tx_ref", "updated_at"])
-
-    callback_url = request.build_absolute_uri(reverse("payment_callback"))
-    payload = {
-        "tx_ref": tx_ref,
-        "amount": Subscription.PLAN_AMOUNT_UGX,
-        "currency": "UGX",
-        "redirect_url": callback_url,
-        "payment_options": "card,mobilemoneyuganda,ussd",
-        "customer": {
-            "email": request.user.email or f"{request.user.username}@cloudstock.local",
-            "name": company.name,
-        },
-        "customizations": {
-            "title": "Cloud Stock Manager",
-            "description": f"Monthly subscription – {company.name}",
-        },
-        "meta": {"company_id": company.id},
-    }
-
-    try:
-        r = requests.post(
-            "https://api.flutterwave.com/v3/payments",
-            json=payload,
-            headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
-            timeout=30,
-        )
-        data = r.json()
-        if data.get("status") == "success" and data.get("data", {}).get("link"):
-            return redirect(data["data"]["link"])
-        messages.error(request, f"Payment init failed: {data.get('message', 'Unknown error')}")
-    except Exception as e:
-        messages.error(request, f"Payment error: {e}")
-
+    sub.claim_payment(phone=phone, tx_id=tx_id, note=note)
+    notify_admin_payment_claim(company, sub)
+    messages.success(
+        request,
+        "Thanks! We received your payment claim. Access will be activated after we confirm the Mobile Money transfer.",
+    )
     return redirect("billing")
-
-
-@login_required
-def payment_callback(request):
-    """User returns here after Flutterwave checkout."""
-    status = request.GET.get("status")
-    tx_ref = request.GET.get("tx_ref")
-    transaction_id = request.GET.get("transaction_id")
-
-    if status != "successful" or not transaction_id:
-        messages.warning(request, "Payment was not completed.")
-        return redirect("billing")
-
-    secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
-    if not secret:
-        messages.error(request, "Cannot verify payment.")
-        return redirect("billing")
-
-    try:
-        r = requests.get(
-            f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify",
-            headers={"Authorization": f"Bearer {secret}"},
-            timeout=30,
-        )
-        data = r.json()
-        if data.get("status") == "success":
-            tx = data.get("data", {})
-            if tx.get("status") == "successful" and float(tx.get("amount", 0)) >= Subscription.PLAN_AMOUNT_UGX:
-                company = get_user_company(request)
-                if company:
-                    sub = company.subscription or Subscription.start_trial(company)
-                    sub.activate_for_month(tx_ref=tx_ref or tx.get("tx_ref", ""))
-                    messages.success(request, "Payment successful! Your subscription is active for 30 days.")
-                    return redirect("dashboard")
-        messages.error(request, "Payment verification failed.")
-    except Exception as e:
-        messages.error(request, f"Verification error: {e}")
-
-    return redirect("billing")
-
-
-@csrf_exempt
-@require_POST
-def flutterwave_webhook(request):
-    """Flutterwave server-to-server webhook (optional but recommended)."""
-    secret_hash = os.getenv("FLUTTERWAVE_WEBHOOK_SECRET", "")
-    signature = request.headers.get("verif-hash", "")
-    if secret_hash and signature != secret_hash:
-        return HttpResponse(status=401)
-
-    try:
-        payload = json.loads(request.body)
-    except json.JSONDecodeError:
-        return HttpResponse(status=400)
-
-    if payload.get("event") == "charge.completed":
-        data = payload.get("data", {})
-        if data.get("status") == "successful":
-            tx_ref = data.get("tx_ref", "")
-            amount = float(data.get("amount", 0))
-            if amount >= Subscription.PLAN_AMOUNT_UGX and tx_ref:
-                sub = Subscription.objects.filter(flutterwave_tx_ref=tx_ref).select_related("company").first()
-                if sub:
-                    sub.activate_for_month(tx_ref=tx_ref)
-
-    return HttpResponse(status=200)
 
 
 # ───────────────────────────── CSV ─────────────────────────────
@@ -598,7 +513,7 @@ def sales_report(request):
     })
 
 
-# ───────────────────────────── Operations (soft-locked) ─────────────────────────────
+# ───────────────────────────── Operations ─────────────────────────────
 
 @login_required
 @require_perm("can_manage_stock")
@@ -714,6 +629,8 @@ Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "qua
     return redirect("dashboard")
 
 
+# ───────────────────────────── Platform Admin ─────────────────────────────
+
 @login_required
 @user_passes_test(is_superuser)
 def platform_create_business(request):
@@ -747,5 +664,23 @@ def platform_create_business(request):
             )
             messages.success(request, f"Created ‘{company.name}’ – owner: {username}")
             return redirect("platform_create_business")
+
     companies = Company.objects.all().order_by("-created_at")
-    return render(request, "inventory/platform_create_business.html", {"companies": companies})
+    pending = (
+        Subscription.objects.filter(status=Subscription.STATUS_PENDING)
+        .select_related("company")
+        .order_by("-payment_claimed_at")
+    )
+    return render(request, "inventory/platform_create_business.html", {
+        "companies": companies,
+        "pending_subs": pending,
+    })
+
+
+@login_required
+@user_passes_test(is_superuser)
+def platform_activate_sub(request, sub_id):
+    sub = get_object_or_404(Subscription, id=sub_id)
+    sub.activate_for_month()
+    messages.success(request, f"Activated {sub.company.name} for 30 days.")
+    return redirect("platform_create_business")
