@@ -2,7 +2,8 @@ import json
 import os
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.models import User
 from django.db.models import F, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,10 +21,17 @@ def get_user_company(request):
     return request.user.profile.company
 
 
+def is_superuser(user):
+    return user.is_authenticated and user.is_superuser
+
+
 @login_required
 def dashboard(request):
     company = get_user_company(request)
     if company is None:
+        # Superusers can still access platform tools without a company
+        if request.user.is_superuser:
+            return redirect("platform_create_business")
         return redirect("setup_company")
 
     items = (
@@ -60,6 +68,7 @@ def dashboard(request):
         "total_inventory_val": total_inventory_val,
         "today_sales_total": today_sales_total,
         "is_owner": request.user.profile.is_owner,
+        "is_platform_admin": request.user.is_superuser,
     }
     return render(request, "inventory/dashboard.html", context)
 
@@ -67,7 +76,6 @@ def dashboard(request):
 @login_required
 def setup_company(request):
     """First-time setup: create a company and link the current user as Owner."""
-    # If they already have a profile, send them to the dashboard
     if hasattr(request.user, "profile"):
         return redirect("dashboard")
 
@@ -99,6 +107,63 @@ def setup_company(request):
         return redirect("dashboard")
 
     return render(request, "inventory/setup_company.html")
+
+
+@login_required
+@user_passes_test(is_superuser)
+def platform_create_business(request):
+    """Platform Admin only: create a new business + owner account in one step."""
+    if request.method == "POST":
+        company_name = request.POST.get("company_name", "").strip()
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
+        email = request.POST.get("email", "").strip()
+
+        errors = []
+        if not company_name:
+            errors.append("Company name is required.")
+        if not username:
+            errors.append("Username is required.")
+        if not password or len(password) < 6:
+            errors.append("Password must be at least 6 characters.")
+
+        if Company.objects.filter(name__iexact=company_name).exists():
+            errors.append("A company with that name already exists.")
+        if User.objects.filter(username__iexact=username).exists():
+            errors.append("That username is already taken.")
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+            return render(request, "inventory/platform_create_business.html")
+
+        # Create everything
+        company = Company.objects.create(name=company_name)
+        user = User.objects.create_user(
+            username=username,
+            email=email or "",
+            password=password,
+        )
+        UserProfile.objects.create(
+            user=user,
+            company=company,
+            role=UserProfile.ROLE_OWNER,
+        )
+
+        messages.success(
+            request,
+            f"Business ‘{company.name}’ created successfully. "
+            f"Owner login → Username: {username}",
+        )
+        return redirect("platform_create_business")
+
+    # Show list of existing companies for overview
+    companies = Company.objects.all().order_by("-created_at")
+    return render(
+        request,
+        "inventory/platform_create_business.html",
+        {"companies": companies},
+    )
 
 
 @login_required
