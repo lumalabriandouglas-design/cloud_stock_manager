@@ -27,24 +27,30 @@ class Company(models.Model):
 class Subscription(models.Model):
     STATUS_TRIAL = "trial"
     STATUS_ACTIVE = "active"
+    STATUS_PENDING = "pending"  # customer claimed payment, waiting for admin
     STATUS_PAST_DUE = "past_due"
     STATUS_SUSPENDED = "suspended"
     STATUS_CHOICES = [
         (STATUS_TRIAL, "Trial"),
         (STATUS_ACTIVE, "Active"),
+        (STATUS_PENDING, "Pending verification"),
         (STATUS_PAST_DUE, "Past due"),
         (STATUS_SUSPENDED, "Suspended"),
     ]
 
-    PLAN_AMOUNT_UGX = 15000  # monthly price
+    PLAN_AMOUNT_UGX = 15000
     TRIAL_DAYS = 7
 
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="sub")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_TRIAL)
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
-    flutterwave_tx_ref = models.CharField(max_length=100, blank=True)
     last_payment_at = models.DateTimeField(null=True, blank=True)
+    # Manual MoMo claim
+    payment_phone = models.CharField(max_length=20, blank=True)
+    payment_tx_id = models.CharField(max_length=100, blank=True)
+    payment_note = models.CharField(max_length=255, blank=True)
+    payment_claimed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -70,13 +76,19 @@ class Subscription(models.Model):
             return self.trial_ends_at and self.trial_ends_at >= now
         return False
 
-    def activate_for_month(self, tx_ref=""):
+    def claim_payment(self, phone="", tx_id="", note=""):
+        self.status = self.STATUS_PENDING
+        self.payment_phone = phone[:20]
+        self.payment_tx_id = tx_id[:100]
+        self.payment_note = note[:255]
+        self.payment_claimed_at = timezone.now()
+        self.save()
+
+    def activate_for_month(self):
         now = timezone.now()
         self.status = self.STATUS_ACTIVE
         self.last_payment_at = now
         self.current_period_end = now + timedelta(days=30)
-        if tx_ref:
-            self.flutterwave_tx_ref = tx_ref
         self.save()
 
     def mark_suspended(self):
