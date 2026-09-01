@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 
@@ -5,14 +6,15 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
-from django.db.models import F, Sum
+from django.db.models import F, Q, Sum
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from google import genai
 from google.genai import types
 from PIL import Image
 
-from .models import Category, Company, Item, Sale, StockIn, UserProfile
+from .models import ActivityLog, Category, Company, Item, Sale, StockIn, UserProfile
 
 
 def get_profile(request):
@@ -45,7 +47,6 @@ def require_perm(perm_name):
 
 
 def perm_context(profile):
-    """Helper – returns simple boolean flags for templates."""
     if profile is None:
         return {}
     return {
@@ -56,6 +57,10 @@ def perm_context(profile):
         "can_manage_team": profile.has_perm("can_manage_team"),
         "is_owner": profile.is_owner,
     }
+
+
+def log_activity(company, user, action, message):
+    ActivityLog.objects.create(company=company, user=user, action=action, message=message)
 
 
 # ───────────────────────────── Auth ─────────────────────────────
@@ -93,17 +98,12 @@ def register(request):
         company = Company.objects.create(name=company_name)
         user = User.objects.create_user(username=username, email=email or "", password=password)
         UserProfile.objects.create(
-            user=user,
-            company=company,
-            role=UserProfile.ROLE_OWNER,
-            can_manage_stock=True,
-            can_edit_items=True,
-            can_view_reports=True,
-            can_manage_categories=True,
-            can_manage_team=True,
+            user=user, company=company, role=UserProfile.ROLE_OWNER,
+            can_manage_stock=True, can_edit_items=True, can_view_reports=True,
+            can_manage_categories=True, can_manage_team=True,
         )
         login(request, user)
-        messages.success(request, f"Welcome! Your business ‘{company.name}’ is ready.")
+        messages.success(request, f"Welcome! Your business ‘{company.name}’ is ready. Start by adding your first products.")
         return redirect("dashboard")
 
     return render(request, "inventory/register.html")
@@ -125,16 +125,11 @@ def setup_company(request):
 
         company = Company.objects.create(name=name)
         UserProfile.objects.create(
-            user=request.user,
-            company=company,
-            role=UserProfile.ROLE_OWNER,
-            can_manage_stock=True,
-            can_edit_items=True,
-            can_view_reports=True,
-            can_manage_categories=True,
-            can_manage_team=True,
+            user=request.user, company=company, role=UserProfile.ROLE_OWNER,
+            can_manage_stock=True, can_edit_items=True, can_view_reports=True,
+            can_manage_categories=True, can_manage_team=True,
         )
-        messages.success(request, f"Company ‘{company.name}’ created.")
+        messages.success(request, f"Company ‘{company.name}’ created. Add your first products below.")
         return redirect("dashboard")
 
     return render(request, "inventory/setup_company.html")
@@ -153,33 +148,104 @@ def dashboard(request):
     company = profile.company
     items = Item.objects.filter(company=company).select_related("category").order_by("name")
     categories = Category.objects.filter(company=company).order_by("name")
+
+    # Search & filters
+    q = request.GET.get("q", "").strip()
+    category_id = request.GET.get("category", "")
+    low_only = request.GET.get("low") == "1"
+
+    if q:
+        items = items.filter(Q(name__icontains=q) | Q(category__name__icontains=q))
+    if category_id:
+        items = items.filter(category_id=category_id)
+    if low_only:
+        items = items.filter(quantity_in_stock__lte=F("reorder_level"))
+
     recent_sales = (
         Sale.objects.filter(company=company)
         .select_related("item")
         .order_by("-sales_date")[:6]
     )
+    recent_activity = ActivityLog.objects.filter(company=company).select_related("user")[:8]
 
     today = timezone.now().date()
     today_sales_total = (
         Sale.objects.filter(company=company, sales_date__date=today)
         .aggregate(total=Sum(F("quantity_sold") * F("sell_price")))["total"] or 0
     )
-    low_stock_count = items.filter(quantity_in_stock__lte=F("reorder_level")).count()
-    total_inventory_val = sum(i.quantity_in_stock * i.buy_price for i in items)
+    low_stock_count = Item.objects.filter(
+        company=company, quantity_in_stock__lte=F("reorder_level")
+    ).count()
+    total_inventory_val = sum(
+        i.quantity_in_stock * i.buy_price
+        for i in Item.objects.filter(company=company)
+    )
 
     context = {
         "company": company,
         "items": items,
         "categories": categories,
         "recent_sales": recent_sales,
+        "recent_activity": recent_activity,
         "low_stock_count": low_stock_count,
         "total_inventory_val": total_inventory_val,
         "today_sales_total": today_sales_total,
         "profile": profile,
         "is_platform_admin": request.user.is_superuser,
+        "q": q,
+        "selected_category": category_id,
+        "low_only": low_only,
         **perm_context(profile),
     }
     return render(request, "inventory/dashboard.html", context)
+
+
+# ───────────────────────────── CSV Exports ─────────────────────────────
+
+@login_required
+@require_perm("can_view_reports")
+def export_inventory_csv(request):
+    company = get_user_company(request)
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{company.name}_inventory.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Name", "Category", "Buy Price", "Sell Price", "Quantity", "Reorder Level"])
+    for item in Item.objects.filter(company=company).select_related("category").order_by("name"):
+        writer.writerow([
+            item.name,
+            item.category.name if item.category else "",
+            item.buy_price,
+            item.sell_price,
+            item.quantity_in_stock,
+            item.reorder_level,
+        ])
+    return response
+
+
+@login_required
+@require_perm("can_view_reports")
+def export_sales_csv(request):
+    company = get_user_company(request)
+    days = int(request.GET.get("days", 30))
+    since = timezone.now() - timezone.timedelta(days=days)
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{company.name}_sales.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Date", "Product", "Qty", "Unit Price", "Revenue", "Est. Cost", "Est. Profit"])
+    for s in Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date"):
+        writer.writerow([
+            s.sales_date.strftime("%Y-%m-%d %H:%M"),
+            s.item.name,
+            s.quantity_sold,
+            s.sell_price,
+            s.line_total,
+            s.estimated_cost,
+            s.estimated_profit,
+        ])
+    return response
 
 
 # ───────────────────────────── Team ─────────────────────────────
@@ -189,11 +255,7 @@ def dashboard(request):
 def manage_team(request):
     profile = get_profile(request)
     company = profile.company
-    members = (
-        UserProfile.objects.filter(company=company)
-        .select_related("user")
-        .order_by("role", "user__username")
-    )
+    members = UserProfile.objects.filter(company=company).select_related("user").order_by("role", "user__username")
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -202,7 +264,6 @@ def manage_team(request):
             username = request.POST.get("username", "").strip()
             password = request.POST.get("password", "")
             role = request.POST.get("role", UserProfile.ROLE_STAFF)
-
             can_manage_stock = request.POST.get("can_manage_stock") == "on"
             can_edit_items = request.POST.get("can_edit_items") == "on"
             can_view_reports = request.POST.get("can_view_reports") == "on"
@@ -216,9 +277,7 @@ def manage_team(request):
             else:
                 user = User.objects.create_user(username=username, password=password)
                 UserProfile.objects.create(
-                    user=user,
-                    company=company,
-                    role=role,
+                    user=user, company=company, role=role,
                     can_manage_stock=can_manage_stock or role == UserProfile.ROLE_OWNER,
                     can_edit_items=can_edit_items or role == UserProfile.ROLE_OWNER,
                     can_view_reports=can_view_reports or role == UserProfile.ROLE_OWNER,
@@ -228,8 +287,7 @@ def manage_team(request):
                 messages.success(request, f"Added {username}.")
 
         elif action == "update_perms":
-            profile_id = request.POST.get("profile_id")
-            member = get_object_or_404(UserProfile, id=profile_id, company=company)
+            member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.is_owner:
                 messages.error(request, "Cannot change permissions of an Owner.")
             else:
@@ -242,8 +300,7 @@ def manage_team(request):
                 messages.success(request, f"Permissions updated for {member.user.username}.")
 
         elif action == "remove":
-            profile_id = request.POST.get("profile_id")
-            member = get_object_or_404(UserProfile, id=profile_id, company=company)
+            member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.user == request.user:
                 messages.error(request, "You cannot remove yourself.")
             elif member.is_owner and UserProfile.objects.filter(company=company, role=UserProfile.ROLE_OWNER).count() <= 1:
@@ -256,10 +313,7 @@ def manage_team(request):
         return redirect("manage_team")
 
     return render(request, "inventory/manage_team.html", {
-        "company": company,
-        "members": members,
-        "profile": profile,
-        **perm_context(profile),
+        "company": company, "members": members, "profile": profile, **perm_context(profile),
     })
 
 
@@ -274,7 +328,6 @@ def manage_categories(request):
 
     if request.method == "POST":
         action = request.POST.get("action")
-
         if action == "add":
             name = request.POST.get("name", "").strip()
             if not name:
@@ -284,7 +337,6 @@ def manage_categories(request):
             else:
                 Category.objects.create(company=company, name=name.title())
                 messages.success(request, "Category added.")
-
         elif action == "edit":
             cat = get_object_or_404(Category, id=request.POST.get("category_id"), company=company)
             name = request.POST.get("name", "").strip()
@@ -294,19 +346,14 @@ def manage_categories(request):
                 messages.success(request, "Updated.")
             else:
                 messages.error(request, "Invalid or duplicate name.")
-
         elif action == "delete":
             cat = get_object_or_404(Category, id=request.POST.get("category_id"), company=company)
             cat.delete()
             messages.success(request, "Deleted.")
-
         return redirect("manage_categories")
 
     return render(request, "inventory/manage_categories.html", {
-        "company": company,
-        "categories": categories,
-        "profile": profile,
-        **perm_context(profile),
+        "company": company, "categories": categories, "profile": profile, **perm_context(profile),
     })
 
 
@@ -333,6 +380,7 @@ def edit_item(request, item_id):
         elif Item.objects.filter(company=company, name__iexact=name).exclude(id=item.id).exists():
             messages.error(request, "Name already used.")
         else:
+            old_qty = item.quantity_in_stock
             item.name = name
             item.category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
             item.buy_price = buy_price
@@ -349,15 +397,12 @@ def edit_item(request, item_id):
                     pass
 
             item.save()
+            log_activity(company, request.user, ActivityLog.ACTION_ITEM_EDIT, f"Updated {item.name}")
             messages.success(request, f"‘{item.name}’ updated.")
             return redirect("dashboard")
 
     return render(request, "inventory/edit_item.html", {
-        "company": company,
-        "item": item,
-        "categories": categories,
-        "profile": profile,
-        **perm_context(profile),
+        "company": company, "item": item, "categories": categories, "profile": profile, **perm_context(profile),
     })
 
 
@@ -371,27 +416,17 @@ def sales_report(request):
     days = int(request.GET.get("days", 30))
     since = timezone.now() - timezone.timedelta(days=days)
 
-    sales = (
-        Sale.objects.filter(company=company, sales_date__gte=since)
-        .select_related("item")
-        .order_by("-sales_date")
-    )
-
+    sales = Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date")
     total_revenue = sum(s.line_total for s in sales)
     total_cost = sum(s.estimated_cost for s in sales)
     total_profit = total_revenue - total_cost
     total_qty = sum(s.quantity_sold for s in sales)
 
     return render(request, "inventory/sales_report.html", {
-        "company": company,
-        "sales": sales,
-        "days": days,
-        "total_revenue": total_revenue,
-        "total_cost": total_cost,
-        "total_profit": total_profit,
-        "total_qty": total_qty,
-        "profile": profile,
-        "is_platform_admin": request.user.is_superuser,
+        "company": company, "sales": sales, "days": days,
+        "total_revenue": total_revenue, "total_cost": total_cost,
+        "total_profit": total_profit, "total_qty": total_qty,
+        "profile": profile, "is_platform_admin": request.user.is_superuser,
         **perm_context(profile),
     })
 
@@ -421,6 +456,7 @@ def record_sale(request):
         Sale.objects.create(company=company, item=item, quantity_sold=quantity, sell_price=sell_price)
         item.quantity_in_stock -= quantity
         item.save()
+        log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}× {item.name}")
         messages.success(request, f"Sold {quantity} × {item.name}.")
 
     return redirect("dashboard")
@@ -445,16 +481,9 @@ def record_stock_in(request):
         category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
 
         item, created = Item.objects.get_or_create(
-            company=company,
-            name=normalized,
-            defaults={
-                "category": category,
-                "buy_price": buy_price,
-                "sell_price": sell_price,
-                "quantity_in_stock": 0,
-            },
+            company=company, name=normalized,
+            defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0},
         )
-
         item.quantity_in_stock += quantity
         if buy_price:
             item.buy_price = buy_price
@@ -463,8 +492,8 @@ def record_stock_in(request):
         if category and not item.category:
             item.category = category
         item.save()
-
         StockIn.objects.create(company=company, item=item, quantity_added=quantity)
+        log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"+{quantity} {item.name}")
         messages.success(request, f"{'Created' if created else 'Restocked'} {item.name}: +{quantity}")
 
     return redirect("dashboard")
@@ -520,6 +549,7 @@ Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "qua
                 added += 1
 
             if added:
+                log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"AI scan imported {added} item(s)")
                 messages.success(request, f"Imported {added} item(s).")
             else:
                 messages.warning(request, "No products extracted.")
