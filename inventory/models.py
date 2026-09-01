@@ -1,15 +1,87 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 
 
 class Company(models.Model):
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    # Owner preference: receive email when any item hits reorder level
     low_stock_email_alerts = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
+
+    @property
+    def subscription(self):
+        return getattr(self, "sub", None)
+
+    def is_subscription_active(self):
+        sub = self.subscription
+        if sub is None:
+            return False
+        return sub.is_active
+
+
+class Subscription(models.Model):
+    STATUS_TRIAL = "trial"
+    STATUS_ACTIVE = "active"
+    STATUS_PAST_DUE = "past_due"
+    STATUS_SUSPENDED = "suspended"
+    STATUS_CHOICES = [
+        (STATUS_TRIAL, "Trial"),
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_PAST_DUE, "Past due"),
+        (STATUS_SUSPENDED, "Suspended"),
+    ]
+
+    PLAN_AMOUNT_UGX = 10000  # monthly price
+    TRIAL_DAYS = 7
+
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="sub")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_TRIAL)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    current_period_end = models.DateTimeField(null=True, blank=True)
+    flutterwave_tx_ref = models.CharField(max_length=100, blank=True)
+    last_payment_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.company.name} – {self.status}"
+
+    @classmethod
+    def start_trial(cls, company):
+        return cls.objects.create(
+            company=company,
+            status=cls.STATUS_TRIAL,
+            trial_ends_at=timezone.now() + timedelta(days=cls.TRIAL_DAYS),
+        )
+
+    @property
+    def is_active(self):
+        now = timezone.now()
+        if self.status == self.STATUS_ACTIVE:
+            if self.current_period_end and self.current_period_end < now:
+                return False
+            return True
+        if self.status == self.STATUS_TRIAL:
+            return self.trial_ends_at and self.trial_ends_at >= now
+        return False
+
+    def activate_for_month(self, tx_ref=""):
+        now = timezone.now()
+        self.status = self.STATUS_ACTIVE
+        self.last_payment_at = now
+        self.current_period_end = now + timedelta(days=30)
+        if tx_ref:
+            self.flutterwave_tx_ref = tx_ref
+        self.save()
+
+    def mark_suspended(self):
+        self.status = self.STATUS_SUSPENDED
+        self.save()
 
 
 class UserProfile(models.Model):
