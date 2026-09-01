@@ -10,16 +10,12 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-from .models import Category, Item, Sale, StockIn
+from .models import Category, Company, Item, Sale, StockIn, UserProfile
 
 
 def get_user_company(request):
-    """Helper – raise a clear error if the user has no profile."""
+    """Return the company for the logged-in user, or None if not set up yet."""
     if not hasattr(request.user, "profile"):
-        messages.error(
-            request,
-            "Your account is not linked to any company. Please contact an administrator.",
-        )
         return None
     return request.user.profile.company
 
@@ -28,7 +24,7 @@ def get_user_company(request):
 def dashboard(request):
     company = get_user_company(request)
     if company is None:
-        return redirect("login")
+        return redirect("setup_company")
 
     items = (
         Item.objects.filter(company=company)
@@ -63,8 +59,46 @@ def dashboard(request):
         "low_stock_count": low_stock_items.count(),
         "total_inventory_val": total_inventory_val,
         "today_sales_total": today_sales_total,
+        "is_owner": request.user.profile.is_owner,
     }
     return render(request, "inventory/dashboard.html", context)
+
+
+@login_required
+def setup_company(request):
+    """First-time setup: create a company and link the current user as Owner."""
+    # If they already have a profile, send them to the dashboard
+    if hasattr(request.user, "profile"):
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        name = request.POST.get("company_name", "").strip()
+
+        if not name:
+            messages.error(request, "Please enter a company / business name.")
+            return render(request, "inventory/setup_company.html")
+
+        if Company.objects.filter(name__iexact=name).exists():
+            messages.error(
+                request,
+                "A company with that name already exists. Choose a different name or contact support.",
+            )
+            return render(request, "inventory/setup_company.html")
+
+        company = Company.objects.create(name=name)
+        UserProfile.objects.create(
+            user=request.user,
+            company=company,
+            role=UserProfile.ROLE_OWNER,
+        )
+
+        messages.success(
+            request,
+            f"Welcome! Your company ‘{company.name}’ has been created. You are the Owner.",
+        )
+        return redirect("dashboard")
+
+    return render(request, "inventory/setup_company.html")
 
 
 @login_required
@@ -72,7 +106,7 @@ def record_sale(request):
     if request.method == "POST":
         company = get_user_company(request)
         if company is None:
-            return redirect("login")
+            return redirect("setup_company")
 
         item_id = request.POST.get("item_id")
         quantity = int(request.POST.get("quantity", 1))
@@ -114,7 +148,7 @@ def record_stock_in(request):
     if request.method == "POST":
         company = get_user_company(request)
         if company is None:
-            return redirect("login")
+            return redirect("setup_company")
 
         item_name = request.POST.get("item_name", "").strip()
         category_id = request.POST.get("category_id")
@@ -171,7 +205,7 @@ def scan_ledger(request):
     if request.method == "POST" and request.FILES.get("ledger_photo"):
         company = get_user_company(request)
         if company is None:
-            return redirect("login")
+            return redirect("setup_company")
 
         photo = request.FILES["ledger_photo"]
         api_key = os.getenv("GEMINI_API_KEY")
