@@ -28,12 +28,25 @@ class UserProfile(models.Model):
         max_length=20, choices=ROLE_CHOICES, default=ROLE_OWNER
     )
 
+    # Flexible permissions (Owner always has full access)
+    can_manage_stock = models.BooleanField(default=True)
+    can_edit_items = models.BooleanField(default=True)
+    can_view_reports = models.BooleanField(default=True)
+    can_manage_categories = models.BooleanField(default=False)
+    can_manage_team = models.BooleanField(default=False)
+
     def __str__(self):
         return f"{self.user.username} ({self.company.name}) – {self.get_role_display()}"
 
     @property
     def is_owner(self):
         return self.role == self.ROLE_OWNER
+
+    def has_perm(self, perm_name):
+        """Check a permission. Owners always return True."""
+        if self.is_owner:
+            return True
+        return getattr(self, perm_name, False)
 
 
 class Category(models.Model):
@@ -70,7 +83,6 @@ class Item(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        # Normalize name: strip + title-case for consistency
         if self.name:
             self.name = " ".join(self.name.strip().split()).title()
         super().save(*args, **kwargs)
