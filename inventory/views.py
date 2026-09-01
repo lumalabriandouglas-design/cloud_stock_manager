@@ -31,7 +31,6 @@ def is_superuser(user):
 
 
 def require_perm(perm_name):
-    """Decorator factory – checks profile.has_perm(perm_name)."""
     def decorator(view_func):
         def wrapper(request, *args, **kwargs):
             profile = get_profile(request)
@@ -43,6 +42,20 @@ def require_perm(perm_name):
             return view_func(request, *args, **kwargs)
         return wrapper
     return decorator
+
+
+def perm_context(profile):
+    """Helper – returns simple boolean flags for templates."""
+    if profile is None:
+        return {}
+    return {
+        "can_manage_stock": profile.has_perm("can_manage_stock"),
+        "can_edit_items": profile.has_perm("can_edit_items"),
+        "can_view_reports": profile.has_perm("can_view_reports"),
+        "can_manage_categories": profile.has_perm("can_manage_categories"),
+        "can_manage_team": profile.has_perm("can_manage_team"),
+        "is_owner": profile.is_owner,
+    }
 
 
 # ───────────────────────────── Auth ─────────────────────────────
@@ -164,6 +177,7 @@ def dashboard(request):
         "today_sales_total": today_sales_total,
         "profile": profile,
         "is_platform_admin": request.user.is_superuser,
+        **perm_context(profile),
     }
     return render(request, "inventory/dashboard.html", context)
 
@@ -245,6 +259,7 @@ def manage_team(request):
         "company": company,
         "members": members,
         "profile": profile,
+        **perm_context(profile),
     })
 
 
@@ -291,6 +306,7 @@ def manage_categories(request):
         "company": company,
         "categories": categories,
         "profile": profile,
+        **perm_context(profile),
     })
 
 
@@ -341,6 +357,7 @@ def edit_item(request, item_id):
         "item": item,
         "categories": categories,
         "profile": profile,
+        **perm_context(profile),
     })
 
 
@@ -375,6 +392,7 @@ def sales_report(request):
         "total_qty": total_qty,
         "profile": profile,
         "is_platform_admin": request.user.is_superuser,
+        **perm_context(profile),
     })
 
 
