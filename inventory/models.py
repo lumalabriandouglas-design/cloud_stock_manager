@@ -5,6 +5,8 @@ from django.db import models
 class Company(models.Model):
     name = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Owner preference: receive email when any item hits reorder level
+    low_stock_email_alerts = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -72,6 +74,10 @@ class Item(models.Model):
         if self.name:
             self.name = " ".join(self.name.strip().split()).title()
         super().save(*args, **kwargs)
+
+    @property
+    def is_low_stock(self):
+        return self.quantity_in_stock <= self.reorder_level
 
 
 class Sale(models.Model):
