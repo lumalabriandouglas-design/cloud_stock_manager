@@ -23,7 +23,7 @@
     {% if messages %}
     <div class="space-y-2">
         {% for message in messages %}
-        <div class="rounded-lg px-4 py-3 text-sm {% if message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-100{% elif message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-100{% else %}bg-slate-50 text-slate-700 border border-slate-200{% endif %}">{{ message }}</div>
+        <div class="rounded-lg px-4 py-3 text-sm {% if message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-100{% elif message.tags == 'error' %}bg-rose-50 text-rose-800 border border-rose-100{% else %}bg-blue-50 text-blue-800 border border-blue-100{% endif %}">{{ message }}</div>
         {% endfor %}
     </div>
     {% endif %}
@@ -33,50 +33,88 @@
             <h1 class="text-sm font-semibold text-slate-800">Subscription</h1>
             <p class="text-xs text-slate-400 mt-0.5">{{ company.name }}</p>
         </div>
-        <div class="p-5 space-y-4">
-            <div class="flex justify-between text-sm">
+        <div class="p-5 space-y-3 text-sm">
+            <div class="flex justify-between">
                 <span class="text-slate-500">Status</span>
                 <span class="font-medium
                     {% if subscription.status == 'active' %}text-emerald-600
                     {% elif subscription.status == 'trial' %}text-blue-600
+                    {% elif subscription.status == 'pending' %}text-amber-600
                     {% else %}text-rose-600{% endif %}">
                     {{ subscription.get_status_display }}
-                    {% if not sub_active %}(expired){% endif %}
+                    {% if not sub_active and subscription.status != 'pending' %}(expired){% endif %}
                 </span>
             </div>
-            <div class="flex justify-between text-sm">
+            <div class="flex justify-between">
                 <span class="text-slate-500">Plan</span>
                 <span class="font-medium text-slate-900">UGX {{ plan_amount|intcomma }} / month</span>
             </div>
             {% if subscription.status == 'trial' and subscription.trial_ends_at %}
-            <div class="flex justify-between text-sm">
+            <div class="flex justify-between">
                 <span class="text-slate-500">Trial ends</span>
                 <span class="font-medium">{{ subscription.trial_ends_at|date:"d M Y" }}</span>
             </div>
             {% endif %}
             {% if subscription.current_period_end %}
-            <div class="flex justify-between text-sm">
+            <div class="flex justify-between">
                 <span class="text-slate-500">Paid until</span>
                 <span class="font-medium">{{ subscription.current_period_end|date:"d M Y" }}</span>
             </div>
             {% endif %}
-
-            {% if is_owner %}
-            <form method="post" action="{% url 'initiate_payment' %}" class="pt-2">
-                {% csrf_token %}
-                <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">
-                    {% if sub_active %}Renew for 30 days – UGX {{ plan_amount|intcomma }}{% else %}Pay UGX {{ plan_amount|intcomma }} &amp; activate{% endif %}
-                </button>
-            </form>
-            <p class="text-[11px] text-slate-400 text-center">Pay with card or Mobile Money (MTN / Airtel) via Flutterwave</p>
-            {% else %}
-            <p class="text-sm text-slate-500">Ask the business owner to renew the subscription.</p>
-            {% endif %}
         </div>
     </div>
 
+    {% if is_owner %}
+    <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100">
+            <h2 class="text-sm font-semibold text-slate-800">Pay with Mobile Money</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Send UGX {{ plan_amount|intcomma }} to either number</p>
+        </div>
+        <div class="p-5 space-y-4">
+            <div class="grid grid-cols-1 gap-3">
+                <div class="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+                    <p class="text-[11px] font-medium text-slate-400 uppercase">MTN MoMo</p>
+                    <p class="text-lg font-semibold text-slate-900 tracking-wide">0781 085 183</p>
+                </div>
+                <div class="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
+                    <p class="text-[11px] font-medium text-slate-400 uppercase">Airtel Money</p>
+                    <p class="text-lg font-semibold text-slate-900 tracking-wide">0755 548 624</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-500">Use your <strong>business name</strong> as the payment reason / reference if asked.</p>
+
+            {% if subscription.status == 'pending' %}
+            <div class="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800">
+                Payment claim received. We will activate your account after confirming the transfer (usually within a few hours).
+            </div>
+            {% else %}
+            <form method="post" action="{% url 'claim_payment' %}" class="space-y-3 pt-1">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Phone you paid from (optional)</label>
+                    <input type="text" name="payment_phone" placeholder="07…" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Transaction ID (optional)</label>
+                    <input type="text" name="payment_tx_id" placeholder="From MoMo SMS" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Note (optional)</label>
+                    <input type="text" name="payment_note" placeholder="Any extra detail" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
+                </div>
+                <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">
+                    I have paid UGX {{ plan_amount|intcomma }}
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-500 text-center">Ask the business owner to renew the subscription.</p>
+    {% endif %}
+
     <p class="text-center text-xs text-slate-400">
-        When the trial or paid period ends, you can still view data but cannot record sales or stock until you renew.
+        After payment is confirmed you get 30 days of full access. During trial or active period you can use all features.
     </p>
 </main>
 </body>

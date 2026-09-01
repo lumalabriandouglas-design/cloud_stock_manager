@@ -6,6 +6,7 @@ urlpatterns = [
     path("register/", views.register, name="register"),
     path("setup/", views.setup_company, name="setup_company"),
     path("platform/create-business/", views.platform_create_business, name="platform_create_business"),
+    path("platform/activate/<int:sub_id>/", views.platform_activate_sub, name="platform_activate_sub"),
 
     path("team/", views.manage_team, name="manage_team"),
     path("categories/", views.manage_categories, name="manage_categories"),
@@ -13,9 +14,7 @@ urlpatterns = [
     path("reports/sales/", views.sales_report, name="sales_report"),
 
     path("billing/", views.billing, name="billing"),
-    path("billing/pay/", views.initiate_payment, name="initiate_payment"),
-    path("billing/callback/", views.payment_callback, name="payment_callback"),
-    path("billing/webhook/", views.flutterwave_webhook, name="flutterwave_webhook"),
+    path("billing/claim/", views.claim_payment, name="claim_payment"),
 
     path("export/inventory/", views.export_inventory_csv, name="export_inventory_csv"),
     path("export/sales/", views.export_sales_csv, name="export_sales_csv"),
