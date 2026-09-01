@@ -1,6 +1,7 @@
 import csv
 import json
 import os
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import login
@@ -101,7 +102,7 @@ def notify_low_stock(company, item):
     subject = f"[{company.name}] Low stock: {item.name}"
     body = (
         f"Item: {item.name}\nCurrent stock: {item.quantity_in_stock}\n"
-        f"Reorder level: {item.reorder_level}\n\nPlease restock soon.\n\n— Cloud Stock Manager"
+        f"Reorder level: {item.reorder_level}\n\nPlease restock soon.\n\n- Cloud Stock Manager"
     )
     try:
         send_mail(subject, body, None, emails, fail_silently=True)
@@ -113,12 +114,12 @@ def notify_admin_payment_claim(company, sub):
     admin_email = os.getenv("PAYMENT_NOTIFY_EMAIL", "")
     if not admin_email:
         return
-    subject = f"[Payment claim] {company.name} – UGX {Subscription.PLAN_AMOUNT_UGX:,}"
+    subject = f"[Payment claim] {company.name} - UGX {Subscription.PLAN_AMOUNT_UGX:,}"
     body = (
         f"Company: {company.name}\n"
-        f"Phone: {sub.payment_phone or '—'}\n"
-        f"Tx ID: {sub.payment_tx_id or '—'}\n"
-        f"Note: {sub.payment_note or '—'}\n"
+        f"Phone: {sub.payment_phone or '-'}\n"
+        f"Tx ID: {sub.payment_tx_id or '-'}\n"
+        f"Note: {sub.payment_note or '-'}\n"
         f"Claimed at: {sub.payment_claimed_at}\n\n"
         f"Activate from Platform Admin when you confirm the MoMo deposit.\n"
     )
@@ -128,19 +129,15 @@ def notify_admin_payment_claim(company, sub):
         pass
 
 
-# ───────────────────────────── Auth ─────────────────────────────
-
 def register(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
-
     if request.method == "POST":
         company_name = request.POST.get("company_name", "").strip()
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         password2 = request.POST.get("password2", "")
         email = request.POST.get("email", "").strip()
-
         errors = []
         if not company_name:
             errors.append("Business name is required.")
@@ -154,12 +151,10 @@ def register(request):
             errors.append("A business with that name already exists.")
         if User.objects.filter(username__iexact=username).exists():
             errors.append("That username is already taken.")
-
         if errors:
             for e in errors:
                 messages.error(request, e)
             return render(request, "inventory/register.html")
-
         company = Company.objects.create(name=company_name)
         Subscription.start_trial(company)
         user = User.objects.create_user(username=username, email=email or "", password=password)
@@ -174,7 +169,6 @@ def register(request):
             f"Welcome! Your 7-day free trial has started. Plan is UGX {Subscription.PLAN_AMOUNT_UGX:,}/month after trial.",
         )
         return redirect("dashboard")
-
     return render(request, "inventory/register.html")
 
 
@@ -182,7 +176,6 @@ def register(request):
 def setup_company(request):
     if hasattr(request.user, "profile"):
         return redirect("dashboard")
-
     if request.method == "POST":
         name = request.POST.get("company_name", "").strip()
         if not name:
@@ -191,7 +184,6 @@ def setup_company(request):
         if Company.objects.filter(name__iexact=name).exists():
             messages.error(request, "A company with that name already exists.")
             return render(request, "inventory/setup_company.html")
-
         company = Company.objects.create(name=name)
         Subscription.start_trial(company)
         UserProfile.objects.create(
@@ -199,52 +191,42 @@ def setup_company(request):
             can_manage_stock=True, can_edit_items=True, can_view_reports=True,
             can_manage_categories=True, can_manage_team=True,
         )
-        messages.success(request, f"Company ‘{company.name}’ created. 7-day trial started.")
+        messages.success(request, f"Company '{company.name}' created. 7-day trial started.")
         return redirect("dashboard")
-
     return render(request, "inventory/setup_company.html")
 
-
-# ───────────────────────────── Dashboard ─────────────────────────────
 
 @login_required
 def dashboard(request):
     profile = get_profile(request)
     if profile is None:
         if request.user.is_superuser:
-            return redirect("platform_create_business")
+            return redirect("platform_admin")
         return redirect("setup_company")
-
     company = profile.company
     all_items = Item.objects.filter(company=company).select_related("category")
     items = all_items.order_by("name")
     categories = Category.objects.filter(company=company).order_by("name")
-
     q = request.GET.get("q", "").strip()
     category_id = request.GET.get("category", "")
     low_only = request.GET.get("low") == "1"
-
     if q:
         items = items.filter(Q(name__icontains=q) | Q(category__name__icontains=q))
     if category_id:
         items = items.filter(category_id=category_id)
     if low_only:
         items = items.filter(quantity_in_stock__lte=F("reorder_level"))
-
     recent_activity = ActivityLog.objects.filter(company=company).select_related("user")[:8]
     low_stock_items = all_items.filter(quantity_in_stock__lte=F("reorder_level")).order_by("quantity_in_stock")[:10]
     low_stock_count = all_items.filter(quantity_in_stock__lte=F("reorder_level")).count()
-
     today = timezone.now().date()
     today_sales_total = (
         Sale.objects.filter(company=company, sales_date__date=today)
         .aggregate(total=Sum(F("quantity_sold") * F("sell_price")))["total"] or 0
     )
     total_inventory_val = sum(i.quantity_in_stock * i.buy_price for i in all_items)
-
     sub = company.subscription
     sub_active = company.is_subscription_active()
-
     context = {
         "company": company,
         "items": items,
@@ -266,8 +248,6 @@ def dashboard(request):
     return render(request, "inventory/dashboard.html", context)
 
 
-# ───────────────────────────── Billing (manual MoMo) ─────────────────────────────
-
 @login_required
 def billing(request):
     profile = get_profile(request)
@@ -277,7 +257,6 @@ def billing(request):
     sub = company.subscription
     if sub is None:
         sub = Subscription.start_trial(company)
-
     return render(request, "inventory/billing.html", {
         "company": company,
         "subscription": sub,
@@ -295,14 +274,11 @@ def claim_payment(request):
     if profile is None or not profile.is_owner:
         messages.error(request, "Only the business owner can submit a payment claim.")
         return redirect("billing")
-
     company = profile.company
     sub = company.subscription or Subscription.start_trial(company)
-
     phone = request.POST.get("payment_phone", "").strip()
     tx_id = request.POST.get("payment_tx_id", "").strip()
     note = request.POST.get("payment_note", "").strip()
-
     sub.claim_payment(phone=phone, tx_id=tx_id, note=note)
     notify_admin_payment_claim(company, sub)
     messages.success(
@@ -311,8 +287,6 @@ def claim_payment(request):
     )
     return redirect("billing")
 
-
-# ───────────────────────────── CSV ─────────────────────────────
 
 @login_required
 @require_perm("can_view_reports")
@@ -348,15 +322,12 @@ def export_sales_csv(request):
     return response
 
 
-# ───────────────────────────── Team / Categories / Edit / Reports ─────────────────────────────
-
 @login_required
 @require_perm("can_manage_team")
 def manage_team(request):
     profile = get_profile(request)
     company = profile.company
     members = UserProfile.objects.filter(company=company).select_related("user").order_by("role", "user__username")
-
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "add":
@@ -406,7 +377,6 @@ def manage_team(request):
                 member.user.delete()
                 messages.success(request, f"Removed {uname}.")
         return redirect("manage_team")
-
     return render(request, "inventory/manage_team.html", {
         "company": company, "members": members, "profile": profile, **perm_context(profile),
     })
@@ -485,7 +455,7 @@ def edit_item(request, item_id):
                     pass
             item.save()
             log_activity(company, request.user, ActivityLog.ACTION_ITEM_EDIT, f"Updated {item.name}")
-            messages.success(request, f"‘{item.name}’ updated.")
+            messages.success(request, f"'{item.name}' updated.")
             return redirect("dashboard")
     return render(request, "inventory/edit_item.html", {
         "company": company, "item": item, "categories": categories, "profile": profile, **perm_context(profile),
@@ -513,8 +483,6 @@ def sales_report(request):
     })
 
 
-# ───────────────────────────── Operations ─────────────────────────────
-
 @login_required
 @require_perm("can_manage_stock")
 @require_active_sub
@@ -535,9 +503,9 @@ def record_sale(request):
         Sale.objects.create(company=company, item=item, quantity_sold=quantity, sell_price=sell_price)
         item.quantity_in_stock -= quantity
         item.save()
-        log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}× {item.name}")
+        log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}x {item.name}")
         notify_low_stock(company, item)
-        messages.success(request, f"Sold {quantity} × {item.name}.")
+        messages.success(request, f"Sold {quantity} x {item.name}.")
     return redirect("dashboard")
 
 
@@ -589,9 +557,7 @@ def scan_ledger(request):
         try:
             img = Image.open(photo)
             client = genai.Client(api_key=api_key)
-            prompt = """Analyze this handwritten stock ledger. Return strict JSON list of products with:
-name (string), buy_price (number default 0), sell_price (number default 0), quantity (integer default 1).
-Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "quantity": 5}]"""
+            prompt = 'Analyze this handwritten stock ledger. Return strict JSON list of products with: name (string), buy_price (number default 0), sell_price (number default 0), quantity (integer default 1). Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "quantity": 5}]'
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
                 contents=[prompt, img],
@@ -629,7 +595,37 @@ Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "qua
     return redirect("dashboard")
 
 
-# ───────────────────────────── Platform Admin ─────────────────────────────
+@login_required
+@user_passes_test(is_superuser)
+def platform_admin(request):
+    companies = Company.objects.all().order_by("-created_at")
+    pending_subs = (
+        Subscription.objects.filter(status=Subscription.STATUS_PENDING)
+        .select_related("company")
+        .order_by("-payment_claimed_at")
+    )
+    all_subs = list(Subscription.objects.select_related("company"))
+    stats = {
+        "companies": companies.count(),
+        "active": sum(1 for s in all_subs if s.status == Subscription.STATUS_ACTIVE and s.is_active),
+        "trial": sum(1 for s in all_subs if s.status == Subscription.STATUS_TRIAL and s.is_active),
+        "pending": pending_subs.count(),
+    }
+    company_rows = []
+    for c in companies:
+        sub = getattr(c, "sub", None)
+        company_rows.append({
+            "company": c,
+            "sub": sub,
+            "active": c.is_subscription_active(),
+            "users": c.users.count(),
+        })
+    return render(request, "inventory/platform_admin.html", {
+        "stats": stats,
+        "pending_subs": pending_subs,
+        "company_rows": company_rows,
+    })
+
 
 @login_required
 @user_passes_test(is_superuser)
@@ -662,9 +658,8 @@ def platform_create_business(request):
                 can_manage_stock=True, can_edit_items=True, can_view_reports=True,
                 can_manage_categories=True, can_manage_team=True,
             )
-            messages.success(request, f"Created ‘{company.name}’ – owner: {username}")
-            return redirect("platform_create_business")
-
+            messages.success(request, f"Created '{company.name}' - owner: {username}")
+            return redirect("platform_admin")
     companies = Company.objects.all().order_by("-created_at")
     pending = (
         Subscription.objects.filter(status=Subscription.STATUS_PENDING)
@@ -683,4 +678,29 @@ def platform_activate_sub(request, sub_id):
     sub = get_object_or_404(Subscription, id=sub_id)
     sub.activate_for_month()
     messages.success(request, f"Activated {sub.company.name} for 30 days.")
-    return redirect("platform_create_business")
+    return redirect("platform_admin")
+
+
+@login_required
+@user_passes_test(is_superuser)
+def platform_suspend_sub(request, sub_id):
+    sub = get_object_or_404(Subscription, id=sub_id)
+    sub.mark_suspended()
+    messages.success(request, f"Suspended {sub.company.name}.")
+    return redirect("platform_admin")
+
+
+@login_required
+@user_passes_test(is_superuser)
+def platform_extend_sub(request, sub_id):
+    sub = get_object_or_404(Subscription, id=sub_id)
+    now = timezone.now()
+    if sub.current_period_end and sub.current_period_end > now:
+        sub.current_period_end = sub.current_period_end + timedelta(days=30)
+    else:
+        sub.current_period_end = now + timedelta(days=30)
+    sub.status = Subscription.STATUS_ACTIVE
+    sub.last_payment_at = now
+    sub.save()
+    messages.success(request, f"Extended {sub.company.name} by 30 days (until {sub.current_period_end.date()}).")
+    return redirect("platform_admin")
