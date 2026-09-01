@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style> body { font-family: 'Inter', system-ui, sans-serif; } </style>
 </head>
-<body class="h-full text-slate-800 antialiased">
+<body class="h-full text-slate-800 antialiased pb-16 md:pb-0">
 
 <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
@@ -26,6 +26,7 @@
             {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Reports</a>{% endif %}
             {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Categories</a>{% endif %}
             {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Team</a>{% endif %}
+            <a href="{% url 'billing' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Billing</a>
             {% if is_platform_admin %}<a href="{% url 'platform_create_business' %}" class="px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition">Platform</a>{% endif %}
         </nav>
         <div class="flex items-center gap-2">
@@ -45,7 +46,18 @@
     </div>
     {% endif %}
 
-    <!-- Metrics -->
+    {% if not sub_active %}
+    <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <p class="text-sm text-rose-800">Your trial or subscription has ended. You can view data but cannot record sales or stock.</p>
+        <a href="{% url 'billing' %}" class="text-sm font-medium text-rose-700 hover:underline shrink-0">Renew now →</a>
+    </div>
+    {% elif subscription and subscription.status == 'trial' and subscription.trial_ends_at %}
+    <div class="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <p class="text-sm text-blue-800">Free trial active until {{ subscription.trial_ends_at|date:"d M Y" }}. Plan: UGX 15,000/month.</p>
+        <a href="{% url 'billing' %}" class="text-sm font-medium text-blue-700 hover:underline shrink-0">Billing →</a>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div class="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5">
             <p class="text-[11px] sm:text-xs font-medium text-slate-400 uppercase tracking-wide">Products</p>
@@ -65,7 +77,6 @@
         </div>
     </div>
 
-    <!-- Low stock alert list -->
     {% if low_stock_items %}
     <div class="bg-amber-50 border border-amber-100 rounded-xl p-4 sm:p-5">
         <div class="flex items-center justify-between mb-3">
@@ -80,9 +91,7 @@
                     <span class="text-xs {% if item.quantity_in_stock == 0 %}text-rose-600{% else %}text-amber-700{% endif %}">
                         {{ item.quantity_in_stock }} left <span class="text-slate-400">(reorder at {{ item.reorder_level }})</span>
                     </span>
-                    {% if can_edit_items %}
-                    <a href="{% url 'edit_item' item.id %}" class="text-xs text-slate-500 hover:text-emerald-600">Edit</a>
-                    {% endif %}
+                    {% if can_edit_items %}<a href="{% url 'edit_item' item.id %}" class="text-xs text-slate-500 hover:text-emerald-600">Edit</a>{% endif %}
                 </span>
             </li>
             {% endfor %}
@@ -113,7 +122,7 @@
                         {% for cat in categories %}<option value="{{ cat.id }}">{{ cat.name }}</option>{% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">Add Stock</button>
+                <button type="submit" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition" {% if not sub_active %}disabled{% endif %}>Add Stock</button>
             </form>
         </div>
 
@@ -132,7 +141,7 @@
                     <div><label class="block text-xs font-medium text-slate-500 mb-1">Qty</label><input type="number" name="quantity" min="1" value="1" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 bg-slate-50/50"></div>
                     <div><label class="block text-xs font-medium text-slate-500 mb-1">Price (optional)</label><input type="number" step="0.01" name="sell_price" placeholder="Default" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/40 bg-slate-50/50"></div>
                 </div>
-                <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition">Complete Sale</button>
+                <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition" {% if not sub_active %}disabled{% endif %}>Complete Sale</button>
             </form>
             <div class="px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/50">
                 <p class="text-[11px] font-medium text-slate-400 uppercase mb-2">Recent activity</p>
@@ -156,12 +165,11 @@
         <form action="{% url 'scan_ledger' %}" method="post" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 sm:gap-3">
             {% csrf_token %}
             <input type="file" name="ledger_photo" accept="image/*" required class="text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700">
-            <button type="submit" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg transition">Scan</button>
+            <button type="submit" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg transition" {% if not sub_active %}disabled{% endif %}>Scan</button>
         </form>
     </div>
     {% endif %}
 
-    <!-- Inventory -->
     <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
         <div class="px-4 sm:px-5 py-3 border-b border-slate-100 space-y-3">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -221,12 +229,26 @@
             </table>
         </div>
     </div>
-
-    <nav class="md:hidden flex justify-center gap-4 pt-2 pb-6 text-xs text-slate-500">
-        {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="hover:text-slate-800">Reports</a>{% endif %}
-        {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="hover:text-slate-800">Categories</a>{% endif %}
-        {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="hover:text-slate-800">Team</a>{% endif %}
-    </nav>
 </main>
+
+<!-- Fixed mobile bottom nav -->
+<nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-40">
+    <div class="flex justify-around items-center h-14 text-[11px]">
+        <a href="{% url 'dashboard' %}" class="flex flex-col items-center gap-0.5 text-emerald-600 font-medium">
+            <span>Home</span>
+        </a>
+        {% if can_view_reports %}
+        <a href="{% url 'sales_report' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Reports</a>
+        {% endif %}
+        {% if can_manage_categories %}
+        <a href="{% url 'manage_categories' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Categories</a>
+        {% endif %}
+        {% if can_manage_team %}
+        <a href="{% url 'manage_team' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Team</a>
+        {% endif %}
+        <a href="{% url 'billing' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Billing</a>
+    </div>
+</nav>
+
 </body>
 </html>
