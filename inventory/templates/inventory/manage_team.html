@@ -6,89 +6,147 @@
     <title>Team – {{ company.name }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Inter', sans-serif; } </style>
+    <style> body { font-family: 'Inter', system-ui, sans-serif; } </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
-    <header class="bg-slate-900 border-b border-slate-800">
-        <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-            <a href="{% url 'dashboard' %}" class="text-white font-semibold hover:text-emerald-400">← {{ company.name }}</a>
-            <span class="text-slate-400 text-sm">Team Management</span>
-        </div>
-    </header>
+<body class="bg-slate-50 min-h-screen text-slate-800 antialiased">
 
-    <main class="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        {% if messages %}
-        <div class="space-y-2">
-            {% for message in messages %}
-            <div class="rounded-lg px-4 py-3 text-sm font-medium {% if message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200{% else %}bg-rose-50 text-rose-800 border border-rose-200{% endif %}">{{ message }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
+<header class="bg-white border-b border-slate-200">
+    <div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+        <a href="{% url 'dashboard' %}" class="text-sm font-medium text-slate-600 hover:text-slate-900">← {{ company.name }}</a>
+        <span class="text-sm text-slate-400">Team</span>
+    </div>
+</header>
 
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div class="px-6 py-4 bg-slate-900">
-                <h1 class="text-white font-semibold">Add Team Member</h1>
-                <p class="text-slate-400 text-sm mt-1">Owners have full control. Staff can record sales & stock.</p>
-            </div>
-            <form method="post" class="p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add">
+<main class="max-w-4xl mx-auto px-4 py-8 space-y-8">
+
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="rounded-lg px-4 py-3 text-sm {% if message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-100{% else %}bg-rose-50 text-rose-800 border border-rose-100{% endif %}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Add member -->
+    <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100">
+            <h1 class="text-sm font-semibold text-slate-800">Add team member</h1>
+            <p class="text-xs text-slate-400 mt-0.5">Choose exactly what they can do</p>
+        </div>
+        <form method="post" class="p-5 space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Username</label>
-                    <input type="text" name="username" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
+                    <input type="text" name="username" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Password</label>
-                    <input type="password" name="password" required minlength="6" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
+                    <input type="password" name="password" required minlength="6" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Role</label>
-                    <select name="role" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm">
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Role</label>
+                    <select name="role" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
                         <option value="staff">Staff</option>
                         <option value="owner">Owner</option>
                     </select>
                 </div>
-                <div class="flex items-end">
-                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 rounded-lg text-sm">Add Member</button>
+            </div>
+
+            <div>
+                <p class="text-xs font-medium text-slate-500 mb-2">Permissions</p>
+                <div class="flex flex-wrap gap-4">
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="checkbox" name="can_manage_stock" checked class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                        Stock & Sales
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="checkbox" name="can_edit_items" checked class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                        Edit products
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="checkbox" name="can_view_reports" checked class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                        View reports
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="checkbox" name="can_manage_categories" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                        Categories
+                    </label>
+                    <label class="inline-flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                        <input type="checkbox" name="can_manage_team" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                        Manage team
+                    </label>
                 </div>
-            </form>
+            </div>
+
+            <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">Add member</button>
+        </form>
+    </div>
+
+    <!-- Members list -->
+    <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-sm font-semibold text-slate-800">Current team</h2>
+            <span class="text-xs text-slate-400">{{ members|length }}</span>
         </div>
 
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div class="px-6 py-4 bg-slate-900 flex justify-between">
-                <h2 class="text-white font-semibold text-sm">Current Team</h2>
-                <span class="text-xs text-slate-400">{{ members|length }} members</span>
-            </div>
-            <table class="w-full text-sm">
-                <thead class="bg-slate-100 text-xs uppercase text-slate-500">
-                    <tr>
-                        <th class="px-6 py-3 text-left">Username</th>
-                        <th class="px-6 py-3 text-left">Role</th>
-                        <th class="px-6 py-3 text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y">
-                    {% for m in members %}
-                    <tr>
-                        <td class="px-6 py-3 font-medium">{{ m.user.username }}{% if m.user == request.user %} <span class="text-xs text-slate-400">(you)</span>{% endif %}</td>
-                        <td class="px-6 py-3">
-                            <span class="px-2 py-0.5 rounded text-xs font-medium {% if m.is_owner %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-700{% endif %}">{{ m.get_role_display }}</span>
-                        </td>
-                        <td class="px-6 py-3 text-right">
-                            {% if m.user != request.user %}
-                            <form method="post" class="inline" onsubmit="return confirm('Remove this member?')">
-                                {% csrf_token %}
-                                <input type="hidden" name="action" value="remove">
-                                <input type="hidden" name="profile_id" value="{{ m.id }}">
-                                <button type="submit" class="text-rose-600 hover:underline text-xs">Remove</button>
-                            </form>
+        <div class="divide-y divide-slate-100">
+            {% for m in members %}
+            <div class="px-5 py-4">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="font-medium text-slate-900">
+                            {{ m.user.username }}
+                            {% if m.user == request.user %}<span class="text-xs text-slate-400 font-normal">(you)</span>{% endif %}
+                        </p>
+                        <p class="text-xs text-slate-400 mt-0.5">
+                            {% if m.is_owner %}
+                            <span class="text-amber-600 font-medium">Owner</span> · full access
+                            {% else %}
+                            Staff
                             {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                        </p>
+                    </div>
+
+                    {% if not m.is_owner and m.user != request.user %}
+                    <form method="post" onsubmit="return confirm('Remove this member?')">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="remove">
+                        <input type="hidden" name="profile_id" value="{{ m.id }}">
+                        <button type="submit" class="text-xs text-rose-500 hover:text-rose-700">Remove</button>
+                    </form>
+                    {% endif %}
+                </div>
+
+                {% if not m.is_owner %}
+                <form method="post" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update_perms">
+                    <input type="hidden" name="profile_id" value="{{ m.id }}">
+                    <label class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                        <input type="checkbox" name="can_manage_stock" {% if m.can_manage_stock %}checked{% endif %} class="rounded border-slate-300 text-emerald-600 scale-90"> Stock
+                    </label>
+                    <label class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                        <input type="checkbox" name="can_edit_items" {% if m.can_edit_items %}checked{% endif %} class="rounded border-slate-300 text-emerald-600 scale-90"> Edit
+                    </label>
+                    <label class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                        <input type="checkbox" name="can_view_reports" {% if m.can_view_reports %}checked{% endif %} class="rounded border-slate-300 text-emerald-600 scale-90"> Reports
+                    </label>
+                    <label class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                        <input type="checkbox" name="can_manage_categories" {% if m.can_manage_categories %}checked{% endif %} class="rounded border-slate-300 text-emerald-600 scale-90"> Categories
+                    </label>
+                    <label class="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                        <input type="checkbox" name="can_manage_team" {% if m.can_manage_team %}checked{% endif %} class="rounded border-slate-300 text-emerald-600 scale-90"> Team
+                    </label>
+                    <button type="submit" class="text-xs text-emerald-600 hover:text-emerald-800 font-medium ml-1">Save</button>
+                </form>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
-    </main>
+    </div>
+
+</main>
 </body>
 </html>
