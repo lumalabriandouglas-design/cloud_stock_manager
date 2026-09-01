@@ -1,0 +1,170 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Admin – Cloud Stock Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Inter', system-ui, sans-serif; } </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 antialiased">
+
+<header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <div class="h-8 w-8 rounded-lg bg-amber-500 flex items-center justify-center text-white text-xs font-bold">PA</div>
+            <div>
+                <p class="text-sm font-semibold text-slate-900 leading-tight">Platform Admin</p>
+                <p class="text-[11px] text-slate-400 leading-tight">Cloud Stock Manager</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+            <a href="/admin/" class="text-slate-500 hover:text-slate-800">Django Admin</a>
+            <form action="{% url 'logout' %}" method="post">{% csrf_token %}<button type="submit" class="text-slate-500 hover:text-slate-800">Logout</button></form>
+        </div>
+    </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 py-6 sm:py-8 space-y-6">
+
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+        <div class="rounded-lg px-4 py-3 text-sm {% if message.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-100{% else %}bg-rose-50 text-rose-800 border border-rose-100{% endif %}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Metrics -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4">
+            <p class="text-[11px] font-medium text-slate-400 uppercase">Businesses</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900">{{ stats.companies }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4">
+            <p class="text-[11px] font-medium text-slate-400 uppercase">Active subs</p>
+            <p class="mt-1 text-2xl font-semibold text-emerald-600">{{ stats.active }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4">
+            <p class="text-[11px] font-medium text-slate-400 uppercase">On trial</p>
+            <p class="mt-1 text-2xl font-semibold text-blue-600">{{ stats.trial }}</p>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4">
+            <p class="text-[11px] font-medium text-slate-400 uppercase">Pending pay</p>
+            <p class="mt-1 text-2xl font-semibold {% if stats.pending %}text-amber-600{% else %}text-slate-900{% endif %}">{{ stats.pending }}</p>
+        </div>
+    </div>
+
+    <!-- Pending MoMo -->
+    <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-sm font-semibold text-slate-800">Pending Mobile Money</h2>
+            <span class="text-xs text-slate-400">UGX 15,000 each</span>
+        </div>
+        {% if pending_subs %}
+        <ul class="divide-y divide-slate-50">
+            {% for sub in pending_subs %}
+            <li class="px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="text-sm min-w-0">
+                    <p class="font-medium text-slate-900">{{ sub.company.name }}</p>
+                    <p class="text-xs text-slate-500 mt-0.5 truncate">
+                        From: {{ sub.payment_phone|default:"—" }}
+                        · Tx: {{ sub.payment_tx_id|default:"—" }}
+                        {% if sub.payment_note %} · {{ sub.payment_note }}{% endif %}
+                    </p>
+                    <p class="text-[11px] text-slate-400">{{ sub.payment_claimed_at|timesince }} ago</p>
+                </div>
+                <a href="{% url 'platform_activate_sub' sub.id %}"
+                   class="inline-flex justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition shrink-0"
+                   onclick="return confirm('Confirm MoMo received and activate 30 days for {{ sub.company.name }}?')">
+                    Activate 30 days
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="px-5 py-8 text-center text-sm text-slate-400">No pending claims — check when you get a MoMo SMS</p>
+        {% endif %}
+    </div>
+
+    <!-- All subscriptions / companies -->
+    <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <h2 class="text-sm font-semibold text-slate-800">All businesses</h2>
+            <a href="{% url 'platform_create_business' %}" class="text-xs font-medium text-amber-700 hover:underline">+ Create business</a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+                        <th class="px-4 sm:px-5 py-3 font-medium">Company</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium">Status</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium hidden sm:table-cell">Until</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium hidden md:table-cell">Users</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                    {% for row in company_rows %}
+                    <tr class="hover:bg-slate-50/80">
+                        <td class="px-4 sm:px-5 py-3">
+                            <p class="font-medium text-slate-900">{{ row.company.name }}</p>
+                            <p class="text-[11px] text-slate-400">{{ row.company.created_at|date:"d M Y" }}</p>
+                        </td>
+                        <td class="px-4 sm:px-5 py-3">
+                            {% if row.sub %}
+                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium
+                                {% if row.sub.status == 'active' %}bg-emerald-50 text-emerald-700
+                                {% elif row.sub.status == 'trial' %}bg-blue-50 text-blue-700
+                                {% elif row.sub.status == 'pending' %}bg-amber-50 text-amber-700
+                                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                                {{ row.sub.get_status_display }}
+                            </span>
+                            {% if not row.active and row.sub.status != 'pending' %}
+                            <span class="text-[10px] text-rose-500 block mt-0.5">expired</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-xs text-slate-400">No sub</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 sm:px-5 py-3 text-xs text-slate-500 hidden sm:table-cell">
+                            {% if row.sub %}
+                                {% if row.sub.status == 'trial' and row.sub.trial_ends_at %}
+                                    {{ row.sub.trial_ends_at|date:"d M Y" }}
+                                {% elif row.sub.current_period_end %}
+                                    {{ row.sub.current_period_end|date:"d M Y" }}
+                                {% else %}—{% endif %}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 sm:px-5 py-3 text-slate-500 hidden md:table-cell">{{ row.users }}</td>
+                        <td class="px-4 sm:px-5 py-3">
+                            {% if row.sub %}
+                            <div class="flex flex-wrap gap-2">
+                                <a href="{% url 'platform_activate_sub' row.sub.id %}" class="text-xs text-emerald-600 hover:underline"
+                                   onclick="return confirm('Activate / renew 30 days for {{ row.company.name }}?')">Activate</a>
+                                <a href="{% url 'platform_extend_sub' row.sub.id %}" class="text-xs text-blue-600 hover:underline"
+                                   onclick="return confirm('Add another 30 days for {{ row.company.name }}?')">+30d</a>
+                                {% if row.sub.status != 'suspended' %}
+                                <a href="{% url 'platform_suspend_sub' row.sub.id %}" class="text-xs text-rose-500 hover:underline"
+                                   onclick="return confirm('Suspend {{ row.company.name }}?')">Suspend</a>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="px-5 py-10 text-center text-slate-400 text-sm">No businesses yet</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <p class="text-center text-xs text-slate-400">
+        MoMo: MTN 0781 085 183 · Airtel 0755 548 624 · Plan UGX 15,000/mo
+    </p>
+</main>
+</body>
+</html>

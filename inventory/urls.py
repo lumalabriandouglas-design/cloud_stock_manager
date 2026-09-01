@@ -5,8 +5,12 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("register/", views.register, name="register"),
     path("setup/", views.setup_company, name="setup_company"),
+
+    path("platform/", views.platform_admin, name="platform_admin"),
     path("platform/create-business/", views.platform_create_business, name="platform_create_business"),
     path("platform/activate/<int:sub_id>/", views.platform_activate_sub, name="platform_activate_sub"),
+    path("platform/suspend/<int:sub_id>/", views.platform_suspend_sub, name="platform_suspend_sub"),
+    path("platform/extend/<int:sub_id>/", views.platform_extend_sub, name="platform_extend_sub"),
 
     path("team/", views.manage_team, name="manage_team"),
     path("categories/", views.manage_categories, name="manage_categories"),
