@@ -12,6 +12,9 @@ urlpatterns = [
     path("items/<int:item_id>/edit/", views.edit_item, name="edit_item"),
     path("reports/sales/", views.sales_report, name="sales_report"),
 
+    path("export/inventory/", views.export_inventory_csv, name="export_inventory_csv"),
+    path("export/sales/", views.export_sales_csv, name="export_sales_csv"),
+
     path("record-sale/", views.record_sale, name="record_sale"),
     path("record-stock-in/", views.record_stock_in, name="record_stock_in"),
     path("scan-ledger/", views.scan_ledger, name="scan_ledger"),

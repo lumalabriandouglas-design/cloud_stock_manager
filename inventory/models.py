@@ -18,17 +18,10 @@ class UserProfile(models.Model):
         (ROLE_STAFF, "Staff"),
     ]
 
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="profile"
-    )
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="users"
-    )
-    role = models.CharField(
-        max_length=20, choices=ROLE_CHOICES, default=ROLE_OWNER
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="users")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_OWNER)
 
-    # Flexible permissions (Owner always has full access)
     can_manage_stock = models.BooleanField(default=True)
     can_edit_items = models.BooleanField(default=True)
     can_view_reports = models.BooleanField(default=True)
@@ -43,16 +36,13 @@ class UserProfile(models.Model):
         return self.role == self.ROLE_OWNER
 
     def has_perm(self, perm_name):
-        """Check a permission. Owners always return True."""
         if self.is_owner:
             return True
         return getattr(self, perm_name, False)
 
 
 class Category(models.Model):
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="categories"
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="categories")
     name = models.CharField(max_length=100)
 
     class Meta:
@@ -64,13 +54,9 @@ class Category(models.Model):
 
 
 class Item(models.Model):
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="items"
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="items")
     name = models.CharField(max_length=255)
-    category = models.ForeignKey(
-        Category, on_delete=models.SET_NULL, null=True, blank=True
-    )
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     buy_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     sell_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     quantity_in_stock = models.IntegerField(default=0)
@@ -89,9 +75,7 @@ class Item(models.Model):
 
 
 class Sale(models.Model):
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="sales"
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="sales")
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     quantity_sold = models.IntegerField(default=1)
     sell_price = models.DecimalField(max_digits=12, decimal_places=2)
@@ -114,9 +98,32 @@ class Sale(models.Model):
 
 
 class StockIn(models.Model):
-    company = models.ForeignKey(
-        Company, on_delete=models.CASCADE, related_name="stock_entries"
-    )
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="stock_entries")
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
     quantity_added = models.IntegerField(default=0)
     entry_date = models.DateTimeField(auto_now_add=True)
+
+
+class ActivityLog(models.Model):
+    ACTION_SALE = "sale"
+    ACTION_STOCK_IN = "stock_in"
+    ACTION_ITEM_EDIT = "item_edit"
+    ACTION_OTHER = "other"
+    ACTION_CHOICES = [
+        (ACTION_SALE, "Sale"),
+        (ACTION_STOCK_IN, "Stock In"),
+        (ACTION_ITEM_EDIT, "Item Edit"),
+        (ACTION_OTHER, "Other"),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="activities")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default=ACTION_OTHER)
+    message = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.message} ({self.created_at})"
