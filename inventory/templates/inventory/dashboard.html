@@ -27,7 +27,7 @@
             {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Categories</a>{% endif %}
             {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Team</a>{% endif %}
             <a href="{% url 'billing' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Billing</a>
-            {% if is_platform_admin %}<a href="{% url 'platform_create_business' %}" class="px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition">Platform</a>{% endif %}
+            {% if is_platform_admin %}<a href="{% url 'platform_admin' %}" class="px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition">Platform</a>{% endif %}
         </nav>
         <div class="flex items-center gap-2">
             <span class="text-xs text-slate-400 hidden sm:inline">{{ request.user.username }}</span>
@@ -231,21 +231,12 @@
     </div>
 </main>
 
-<!-- Fixed mobile bottom nav -->
 <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 z-40">
     <div class="flex justify-around items-center h-14 text-[11px]">
-        <a href="{% url 'dashboard' %}" class="flex flex-col items-center gap-0.5 text-emerald-600 font-medium">
-            <span>Home</span>
-        </a>
-        {% if can_view_reports %}
-        <a href="{% url 'sales_report' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Reports</a>
-        {% endif %}
-        {% if can_manage_categories %}
-        <a href="{% url 'manage_categories' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Categories</a>
-        {% endif %}
-        {% if can_manage_team %}
-        <a href="{% url 'manage_team' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Team</a>
-        {% endif %}
+        <a href="{% url 'dashboard' %}" class="flex flex-col items-center gap-0.5 text-emerald-600 font-medium"><span>Home</span></a>
+        {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Reports</a>{% endif %}
+        {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Categories</a>{% endif %}
+        {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Team</a>{% endif %}
         <a href="{% url 'billing' %}" class="flex flex-col items-center gap-0.5 text-slate-500">Billing</a>
     </div>
 </nav>
