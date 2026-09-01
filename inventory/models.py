@@ -36,7 +36,7 @@ class Subscription(models.Model):
         (STATUS_SUSPENDED, "Suspended"),
     ]
 
-    PLAN_AMOUNT_UGX = 10000  # monthly price
+    PLAN_AMOUNT_UGX = 15000  # monthly price
     TRIAL_DAYS = 7
 
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="sub")
