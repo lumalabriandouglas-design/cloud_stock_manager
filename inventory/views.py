@@ -1,21 +1,35 @@
 import csv
 import json
 import os
+import uuid
 
+import requests
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.db.models import F, Q, Sum
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from google import genai
 from google.genai import types
 from PIL import Image
 
-from .models import ActivityLog, Category, Company, Item, Sale, StockIn, UserProfile
+from .models import (
+    ActivityLog,
+    Category,
+    Company,
+    Item,
+    Sale,
+    StockIn,
+    Subscription,
+    UserProfile,
+)
 
 
 def get_profile(request):
@@ -47,6 +61,20 @@ def require_perm(perm_name):
     return decorator
 
 
+def require_active_sub(view_func):
+    """Block write actions when subscription is not active."""
+    def wrapper(request, *args, **kwargs):
+        company = get_user_company(request)
+        if company and not company.is_subscription_active():
+            messages.error(
+                request,
+                "Your subscription is inactive. Please renew to continue recording sales and stock.",
+            )
+            return redirect("billing")
+        return view_func(request, *args, **kwargs)
+    return wrapper
+
+
 def perm_context(profile):
     if profile is None:
         return {}
@@ -65,31 +93,27 @@ def log_activity(company, user, action, message):
 
 
 def notify_low_stock(company, item):
-    """Send email to company owners when an item hits/goes below reorder level."""
     if not company.low_stock_email_alerts:
         return
     if item.quantity_in_stock > item.reorder_level:
         return
-
     owners = UserProfile.objects.filter(
         company=company, role=UserProfile.ROLE_OWNER
     ).select_related("user")
     emails = [p.user.email for p in owners if p.user.email]
     if not emails:
         return
-
     subject = f"[{company.name}] Low stock: {item.name}"
     body = (
         f"Item: {item.name}\n"
         f"Current stock: {item.quantity_in_stock}\n"
         f"Reorder level: {item.reorder_level}\n\n"
-        f"Please restock soon.\n\n"
-        f"— Cloud Stock Manager"
+        f"Please restock soon.\n\n— Cloud Stock Manager"
     )
     try:
         send_mail(subject, body, None, emails, fail_silently=True)
     except Exception:
-        pass  # never break the main flow because of email
+        pass
 
 
 # ───────────────────────────── Auth ─────────────────────────────
@@ -125,6 +149,7 @@ def register(request):
             return render(request, "inventory/register.html")
 
         company = Company.objects.create(name=company_name)
+        Subscription.start_trial(company)
         user = User.objects.create_user(username=username, email=email or "", password=password)
         UserProfile.objects.create(
             user=user, company=company, role=UserProfile.ROLE_OWNER,
@@ -132,7 +157,10 @@ def register(request):
             can_manage_categories=True, can_manage_team=True,
         )
         login(request, user)
-        messages.success(request, f"Welcome! Your business ‘{company.name}’ is ready. Start by adding your first products.")
+        messages.success(
+            request,
+            f"Welcome! Your 7-day free trial has started. Plan is UGX {Subscription.PLAN_AMOUNT_UGX:,}/month after trial.",
+        )
         return redirect("dashboard")
 
     return render(request, "inventory/register.html")
@@ -153,12 +181,13 @@ def setup_company(request):
             return render(request, "inventory/setup_company.html")
 
         company = Company.objects.create(name=name)
+        Subscription.start_trial(company)
         UserProfile.objects.create(
             user=request.user, company=company, role=UserProfile.ROLE_OWNER,
             can_manage_stock=True, can_edit_items=True, can_view_reports=True,
             can_manage_categories=True, can_manage_team=True,
         )
-        messages.success(request, f"Company ‘{company.name}’ created. Add your first products below.")
+        messages.success(request, f"Company ‘{company.name}’ created. 7-day trial started.")
         return redirect("dashboard")
 
     return render(request, "inventory/setup_company.html")
@@ -192,16 +221,17 @@ def dashboard(request):
 
     recent_activity = ActivityLog.objects.filter(company=company).select_related("user")[:8]
     low_stock_items = all_items.filter(quantity_in_stock__lte=F("reorder_level")).order_by("quantity_in_stock")[:10]
+    low_stock_count = all_items.filter(quantity_in_stock__lte=F("reorder_level")).count()
 
     today = timezone.now().date()
     today_sales_total = (
         Sale.objects.filter(company=company, sales_date__date=today)
         .aggregate(total=Sum(F("quantity_sold") * F("sell_price")))["total"] or 0
     )
-    low_stock_count = low_stock_items.count() if not low_only else items.count()
-    # accurate count even when filtered
-    low_stock_count = all_items.filter(quantity_in_stock__lte=F("reorder_level")).count()
     total_inventory_val = sum(i.quantity_in_stock * i.buy_price for i in all_items)
+
+    sub = company.subscription
+    sub_active = company.is_subscription_active()
 
     context = {
         "company": company,
@@ -217,12 +247,157 @@ def dashboard(request):
         "q": q,
         "selected_category": category_id,
         "low_only": low_only,
+        "subscription": sub,
+        "sub_active": sub_active,
         **perm_context(profile),
     }
     return render(request, "inventory/dashboard.html", context)
 
 
-# ───────────────────────────── CSV Exports ─────────────────────────────
+# ───────────────────────────── Billing ─────────────────────────────
+
+@login_required
+def billing(request):
+    profile = get_profile(request)
+    if profile is None:
+        return redirect("setup_company")
+    company = profile.company
+    sub = company.subscription
+    if sub is None:
+        sub = Subscription.start_trial(company)
+
+    return render(request, "inventory/billing.html", {
+        "company": company,
+        "subscription": sub,
+        "sub_active": sub.is_active,
+        "plan_amount": Subscription.PLAN_AMOUNT_UGX,
+        "profile": profile,
+        **perm_context(profile),
+    })
+
+
+@login_required
+@require_POST
+def initiate_payment(request):
+    profile = get_profile(request)
+    if profile is None or not profile.is_owner:
+        messages.error(request, "Only the business owner can pay.")
+        return redirect("billing")
+
+    company = profile.company
+    sub = company.subscription or Subscription.start_trial(company)
+
+    secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
+    if not secret:
+        messages.error(request, "Payment is not configured yet. Contact support.")
+        return redirect("billing")
+
+    tx_ref = f"csm-{company.id}-{uuid.uuid4().hex[:12]}"
+    sub.flutterwave_tx_ref = tx_ref
+    sub.save(update_fields=["flutterwave_tx_ref", "updated_at"])
+
+    callback_url = request.build_absolute_uri(reverse("payment_callback"))
+    payload = {
+        "tx_ref": tx_ref,
+        "amount": Subscription.PLAN_AMOUNT_UGX,
+        "currency": "UGX",
+        "redirect_url": callback_url,
+        "payment_options": "card,mobilemoneyuganda,ussd",
+        "customer": {
+            "email": request.user.email or f"{request.user.username}@cloudstock.local",
+            "name": company.name,
+        },
+        "customizations": {
+            "title": "Cloud Stock Manager",
+            "description": f"Monthly subscription – {company.name}",
+        },
+        "meta": {"company_id": company.id},
+    }
+
+    try:
+        r = requests.post(
+            "https://api.flutterwave.com/v3/payments",
+            json=payload,
+            headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+            timeout=30,
+        )
+        data = r.json()
+        if data.get("status") == "success" and data.get("data", {}).get("link"):
+            return redirect(data["data"]["link"])
+        messages.error(request, f"Payment init failed: {data.get('message', 'Unknown error')}")
+    except Exception as e:
+        messages.error(request, f"Payment error: {e}")
+
+    return redirect("billing")
+
+
+@login_required
+def payment_callback(request):
+    """User returns here after Flutterwave checkout."""
+    status = request.GET.get("status")
+    tx_ref = request.GET.get("tx_ref")
+    transaction_id = request.GET.get("transaction_id")
+
+    if status != "successful" or not transaction_id:
+        messages.warning(request, "Payment was not completed.")
+        return redirect("billing")
+
+    secret = os.getenv("FLUTTERWAVE_SECRET_KEY")
+    if not secret:
+        messages.error(request, "Cannot verify payment.")
+        return redirect("billing")
+
+    try:
+        r = requests.get(
+            f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify",
+            headers={"Authorization": f"Bearer {secret}"},
+            timeout=30,
+        )
+        data = r.json()
+        if data.get("status") == "success":
+            tx = data.get("data", {})
+            if tx.get("status") == "successful" and float(tx.get("amount", 0)) >= Subscription.PLAN_AMOUNT_UGX:
+                company = get_user_company(request)
+                if company:
+                    sub = company.subscription or Subscription.start_trial(company)
+                    sub.activate_for_month(tx_ref=tx_ref or tx.get("tx_ref", ""))
+                    messages.success(request, "Payment successful! Your subscription is active for 30 days.")
+                    return redirect("dashboard")
+        messages.error(request, "Payment verification failed.")
+    except Exception as e:
+        messages.error(request, f"Verification error: {e}")
+
+    return redirect("billing")
+
+
+@csrf_exempt
+@require_POST
+def flutterwave_webhook(request):
+    """Flutterwave server-to-server webhook (optional but recommended)."""
+    secret_hash = os.getenv("FLUTTERWAVE_WEBHOOK_SECRET", "")
+    signature = request.headers.get("verif-hash", "")
+    if secret_hash and signature != secret_hash:
+        return HttpResponse(status=401)
+
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return HttpResponse(status=400)
+
+    if payload.get("event") == "charge.completed":
+        data = payload.get("data", {})
+        if data.get("status") == "successful":
+            tx_ref = data.get("tx_ref", "")
+            amount = float(data.get("amount", 0))
+            if amount >= Subscription.PLAN_AMOUNT_UGX and tx_ref:
+                sub = Subscription.objects.filter(flutterwave_tx_ref=tx_ref).select_related("company").first()
+                if sub:
+                    sub.activate_for_month(tx_ref=tx_ref)
+
+    return HttpResponse(status=200)
+
+
+# ───────────────────────────── CSV ─────────────────────────────
 
 @login_required
 @require_perm("can_view_reports")
@@ -234,8 +409,7 @@ def export_inventory_csv(request):
     writer.writerow(["Name", "Category", "Buy Price", "Sell Price", "Quantity", "Reorder Level"])
     for item in Item.objects.filter(company=company).select_related("category").order_by("name"):
         writer.writerow([
-            item.name,
-            item.category.name if item.category else "",
+            item.name, item.category.name if item.category else "",
             item.buy_price, item.sell_price, item.quantity_in_stock, item.reorder_level,
         ])
     return response
@@ -259,7 +433,7 @@ def export_sales_csv(request):
     return response
 
 
-# ───────────────────────────── Team / Categories / Edit / Reports (unchanged logic) ─────────────────────────────
+# ───────────────────────────── Team / Categories / Edit / Reports ─────────────────────────────
 
 @login_required
 @require_perm("can_manage_team")
@@ -367,6 +541,9 @@ def edit_item(request, item_id):
     item = get_object_or_404(Item, id=item_id, company=company)
     categories = Category.objects.filter(company=company).order_by("name")
     if request.method == "POST":
+        if not company.is_subscription_active():
+            messages.error(request, "Subscription inactive. Renew to edit.")
+            return redirect("billing")
         name = request.POST.get("name", "").strip()
         category_id = request.POST.get("category_id")
         buy_price = request.POST.get("buy_price") or 0
@@ -421,40 +598,37 @@ def sales_report(request):
     })
 
 
-# ───────────────────────────── Operations ─────────────────────────────
+# ───────────────────────────── Operations (soft-locked) ─────────────────────────────
 
 @login_required
 @require_perm("can_manage_stock")
+@require_active_sub
 def record_sale(request):
     if request.method == "POST":
         company = get_user_company(request)
         item_id = request.POST.get("item_id")
         quantity = int(request.POST.get("quantity", 1))
         custom_price = request.POST.get("sell_price")
-
         if not item_id:
             messages.error(request, "Select an item.")
             return redirect("dashboard")
-
         item = get_object_or_404(Item, id=item_id, company=company)
         sell_price = custom_price if custom_price else item.sell_price
-
         if item.quantity_in_stock < quantity:
             messages.error(request, f"Only {item.quantity_in_stock} left of {item.name}.")
             return redirect("dashboard")
-
         Sale.objects.create(company=company, item=item, quantity_sold=quantity, sell_price=sell_price)
         item.quantity_in_stock -= quantity
         item.save()
         log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}× {item.name}")
-        notify_low_stock(company, item)  # email owners if now low
+        notify_low_stock(company, item)
         messages.success(request, f"Sold {quantity} × {item.name}.")
-
     return redirect("dashboard")
 
 
 @login_required
 @require_perm("can_manage_stock")
+@require_active_sub
 def record_stock_in(request):
     if request.method == "POST":
         company = get_user_company(request)
@@ -463,14 +637,11 @@ def record_stock_in(request):
         buy_price = request.POST.get("buy_price") or 0
         sell_price = request.POST.get("sell_price") or 0
         quantity = int(request.POST.get("quantity", 0))
-
         if not item_name or quantity <= 0:
             messages.error(request, "Name and positive quantity required.")
             return redirect("dashboard")
-
         normalized = " ".join(item_name.split()).title()
         category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
-
         item, created = Item.objects.get_or_create(
             company=company, name=normalized,
             defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0},
@@ -486,12 +657,12 @@ def record_stock_in(request):
         StockIn.objects.create(company=company, item=item, quantity_added=quantity)
         log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"+{quantity} {item.name}")
         messages.success(request, f"{'Created' if created else 'Restocked'} {item.name}: +{quantity}")
-
     return redirect("dashboard")
 
 
 @login_required
 @require_perm("can_manage_stock")
+@require_active_sub
 def scan_ledger(request):
     if request.method == "POST" and request.FILES.get("ledger_photo"):
         company = get_user_company(request)
@@ -567,6 +738,7 @@ def platform_create_business(request):
                 messages.error(request, e)
         else:
             company = Company.objects.create(name=company_name)
+            Subscription.start_trial(company)
             user = User.objects.create_user(username=username, email=email or "", password=password)
             UserProfile.objects.create(
                 user=user, company=company, role=UserProfile.ROLE_OWNER,
