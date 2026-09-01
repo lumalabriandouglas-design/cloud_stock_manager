@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
 from django.db.models import F, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -61,6 +62,34 @@ def perm_context(profile):
 
 def log_activity(company, user, action, message):
     ActivityLog.objects.create(company=company, user=user, action=action, message=message)
+
+
+def notify_low_stock(company, item):
+    """Send email to company owners when an item hits/goes below reorder level."""
+    if not company.low_stock_email_alerts:
+        return
+    if item.quantity_in_stock > item.reorder_level:
+        return
+
+    owners = UserProfile.objects.filter(
+        company=company, role=UserProfile.ROLE_OWNER
+    ).select_related("user")
+    emails = [p.user.email for p in owners if p.user.email]
+    if not emails:
+        return
+
+    subject = f"[{company.name}] Low stock: {item.name}"
+    body = (
+        f"Item: {item.name}\n"
+        f"Current stock: {item.quantity_in_stock}\n"
+        f"Reorder level: {item.reorder_level}\n\n"
+        f"Please restock soon.\n\n"
+        f"— Cloud Stock Manager"
+    )
+    try:
+        send_mail(subject, body, None, emails, fail_silently=True)
+    except Exception:
+        pass  # never break the main flow because of email
 
 
 # ───────────────────────────── Auth ─────────────────────────────
@@ -146,10 +175,10 @@ def dashboard(request):
         return redirect("setup_company")
 
     company = profile.company
-    items = Item.objects.filter(company=company).select_related("category").order_by("name")
+    all_items = Item.objects.filter(company=company).select_related("category")
+    items = all_items.order_by("name")
     categories = Category.objects.filter(company=company).order_by("name")
 
-    # Search & filters
     q = request.GET.get("q", "").strip()
     category_id = request.GET.get("category", "")
     low_only = request.GET.get("low") == "1"
@@ -161,32 +190,25 @@ def dashboard(request):
     if low_only:
         items = items.filter(quantity_in_stock__lte=F("reorder_level"))
 
-    recent_sales = (
-        Sale.objects.filter(company=company)
-        .select_related("item")
-        .order_by("-sales_date")[:6]
-    )
     recent_activity = ActivityLog.objects.filter(company=company).select_related("user")[:8]
+    low_stock_items = all_items.filter(quantity_in_stock__lte=F("reorder_level")).order_by("quantity_in_stock")[:10]
 
     today = timezone.now().date()
     today_sales_total = (
         Sale.objects.filter(company=company, sales_date__date=today)
         .aggregate(total=Sum(F("quantity_sold") * F("sell_price")))["total"] or 0
     )
-    low_stock_count = Item.objects.filter(
-        company=company, quantity_in_stock__lte=F("reorder_level")
-    ).count()
-    total_inventory_val = sum(
-        i.quantity_in_stock * i.buy_price
-        for i in Item.objects.filter(company=company)
-    )
+    low_stock_count = low_stock_items.count() if not low_only else items.count()
+    # accurate count even when filtered
+    low_stock_count = all_items.filter(quantity_in_stock__lte=F("reorder_level")).count()
+    total_inventory_val = sum(i.quantity_in_stock * i.buy_price for i in all_items)
 
     context = {
         "company": company,
         "items": items,
         "categories": categories,
-        "recent_sales": recent_sales,
         "recent_activity": recent_activity,
+        "low_stock_items": low_stock_items,
         "low_stock_count": low_stock_count,
         "total_inventory_val": total_inventory_val,
         "today_sales_total": today_sales_total,
@@ -208,17 +230,13 @@ def export_inventory_csv(request):
     company = get_user_company(request)
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{company.name}_inventory.csv"'
-
     writer = csv.writer(response)
     writer.writerow(["Name", "Category", "Buy Price", "Sell Price", "Quantity", "Reorder Level"])
     for item in Item.objects.filter(company=company).select_related("category").order_by("name"):
         writer.writerow([
             item.name,
             item.category.name if item.category else "",
-            item.buy_price,
-            item.sell_price,
-            item.quantity_in_stock,
-            item.reorder_level,
+            item.buy_price, item.sell_price, item.quantity_in_stock, item.reorder_level,
         ])
     return response
 
@@ -229,26 +247,19 @@ def export_sales_csv(request):
     company = get_user_company(request)
     days = int(request.GET.get("days", 30))
     since = timezone.now() - timezone.timedelta(days=days)
-
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{company.name}_sales.csv"'
-
     writer = csv.writer(response)
     writer.writerow(["Date", "Product", "Qty", "Unit Price", "Revenue", "Est. Cost", "Est. Profit"])
     for s in Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date"):
         writer.writerow([
-            s.sales_date.strftime("%Y-%m-%d %H:%M"),
-            s.item.name,
-            s.quantity_sold,
-            s.sell_price,
-            s.line_total,
-            s.estimated_cost,
-            s.estimated_profit,
+            s.sales_date.strftime("%Y-%m-%d %H:%M"), s.item.name, s.quantity_sold,
+            s.sell_price, s.line_total, s.estimated_cost, s.estimated_profit,
         ])
     return response
 
 
-# ───────────────────────────── Team ─────────────────────────────
+# ───────────────────────────── Team / Categories / Edit / Reports (unchanged logic) ─────────────────────────────
 
 @login_required
 @require_perm("can_manage_team")
@@ -259,7 +270,6 @@ def manage_team(request):
 
     if request.method == "POST":
         action = request.POST.get("action")
-
         if action == "add":
             username = request.POST.get("username", "").strip()
             password = request.POST.get("password", "")
@@ -269,7 +279,6 @@ def manage_team(request):
             can_view_reports = request.POST.get("can_view_reports") == "on"
             can_manage_categories = request.POST.get("can_manage_categories") == "on"
             can_manage_team = request.POST.get("can_manage_team") == "on"
-
             if not username or len(password) < 6:
                 messages.error(request, "Username and password (min 6 chars) required.")
             elif User.objects.filter(username__iexact=username).exists():
@@ -285,7 +294,6 @@ def manage_team(request):
                     can_manage_team=can_manage_team or role == UserProfile.ROLE_OWNER,
                 )
                 messages.success(request, f"Added {username}.")
-
         elif action == "update_perms":
             member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.is_owner:
@@ -298,7 +306,6 @@ def manage_team(request):
                 member.can_manage_team = request.POST.get("can_manage_team") == "on"
                 member.save()
                 messages.success(request, f"Permissions updated for {member.user.username}.")
-
         elif action == "remove":
             member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.user == request.user:
@@ -309,7 +316,6 @@ def manage_team(request):
                 uname = member.user.username
                 member.user.delete()
                 messages.success(request, f"Removed {uname}.")
-
         return redirect("manage_team")
 
     return render(request, "inventory/manage_team.html", {
@@ -317,15 +323,12 @@ def manage_team(request):
     })
 
 
-# ───────────────────────────── Categories ─────────────────────────────
-
 @login_required
 @require_perm("can_manage_categories")
 def manage_categories(request):
     profile = get_profile(request)
     company = profile.company
     categories = Category.objects.filter(company=company).order_by("name")
-
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "add":
@@ -351,13 +354,10 @@ def manage_categories(request):
             cat.delete()
             messages.success(request, "Deleted.")
         return redirect("manage_categories")
-
     return render(request, "inventory/manage_categories.html", {
         "company": company, "categories": categories, "profile": profile, **perm_context(profile),
     })
 
-
-# ───────────────────────────── Edit Item ─────────────────────────────
 
 @login_required
 @require_perm("can_edit_items")
@@ -366,7 +366,6 @@ def edit_item(request, item_id):
     company = profile.company
     item = get_object_or_404(Item, id=item_id, company=company)
     categories = Category.objects.filter(company=company).order_by("name")
-
     if request.method == "POST":
         name = request.POST.get("name", "").strip()
         category_id = request.POST.get("category_id")
@@ -374,19 +373,16 @@ def edit_item(request, item_id):
         sell_price = request.POST.get("sell_price") or 0
         reorder_level = request.POST.get("reorder_level") or 5
         qty_adjust = request.POST.get("qty_adjust")
-
         if not name:
             messages.error(request, "Name required.")
         elif Item.objects.filter(company=company, name__iexact=name).exclude(id=item.id).exists():
             messages.error(request, "Name already used.")
         else:
-            old_qty = item.quantity_in_stock
             item.name = name
             item.category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
             item.buy_price = buy_price
             item.sell_price = sell_price
             item.reorder_level = int(reorder_level)
-
             if qty_adjust and profile.has_perm("can_manage_stock"):
                 try:
                     delta = int(qty_adjust)
@@ -395,18 +391,14 @@ def edit_item(request, item_id):
                         StockIn.objects.create(company=company, item=item, quantity_added=delta)
                 except ValueError:
                     pass
-
             item.save()
             log_activity(company, request.user, ActivityLog.ACTION_ITEM_EDIT, f"Updated {item.name}")
             messages.success(request, f"‘{item.name}’ updated.")
             return redirect("dashboard")
-
     return render(request, "inventory/edit_item.html", {
         "company": company, "item": item, "categories": categories, "profile": profile, **perm_context(profile),
     })
 
-
-# ───────────────────────────── Reports ─────────────────────────────
 
 @login_required
 @require_perm("can_view_reports")
@@ -415,13 +407,11 @@ def sales_report(request):
     company = profile.company
     days = int(request.GET.get("days", 30))
     since = timezone.now() - timezone.timedelta(days=days)
-
     sales = Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date")
     total_revenue = sum(s.line_total for s in sales)
     total_cost = sum(s.estimated_cost for s in sales)
     total_profit = total_revenue - total_cost
     total_qty = sum(s.quantity_sold for s in sales)
-
     return render(request, "inventory/sales_report.html", {
         "company": company, "sales": sales, "days": days,
         "total_revenue": total_revenue, "total_cost": total_cost,
@@ -457,6 +447,7 @@ def record_sale(request):
         item.quantity_in_stock -= quantity
         item.save()
         log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}× {item.name}")
+        notify_low_stock(company, item)  # email owners if now low
         messages.success(request, f"Sold {quantity} × {item.name}.")
 
     return redirect("dashboard")
@@ -506,24 +497,20 @@ def scan_ledger(request):
         company = get_user_company(request)
         photo = request.FILES["ledger_photo"]
         api_key = os.getenv("GEMINI_API_KEY")
-
         if not api_key:
             messages.error(request, "GEMINI_API_KEY not set.")
             return redirect("dashboard")
-
         try:
             img = Image.open(photo)
             client = genai.Client(api_key=api_key)
             prompt = """Analyze this handwritten stock ledger. Return strict JSON list of products with:
 name (string), buy_price (number default 0), sell_price (number default 0), quantity (integer default 1).
 Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "quantity": 5}]"""
-
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
                 contents=[prompt, img],
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
             )
-
             items_data = json.loads(response.text)
             added = 0
             for entry in items_data:
@@ -534,7 +521,6 @@ Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "qua
                 buy = float(entry.get("buy_price") or 0)
                 sell = float(entry.get("sell_price") or 0)
                 qty = int(entry.get("quantity") or 1)
-
                 item, _ = Item.objects.get_or_create(
                     company=company, name=normalized,
                     defaults={"buy_price": buy, "sell_price": sell, "quantity_in_stock": 0},
@@ -547,7 +533,6 @@ Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "qua
                 item.save()
                 StockIn.objects.create(company=company, item=item, quantity_added=qty)
                 added += 1
-
             if added:
                 log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"AI scan imported {added} item(s)")
                 messages.success(request, f"Imported {added} item(s).")
@@ -555,11 +540,8 @@ Example: [{"name": "Standing Fan", "buy_price": 10000, "sell_price": 20000, "qua
                 messages.warning(request, "No products extracted.")
         except Exception as e:
             messages.error(request, f"Scan error: {e}")
-
     return redirect("dashboard")
 
-
-# ───────────────────────────── Platform Admin ─────────────────────────────
 
 @login_required
 @user_passes_test(is_superuser)
@@ -569,7 +551,6 @@ def platform_create_business(request):
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         email = request.POST.get("email", "").strip()
-
         errors = []
         if not company_name:
             errors.append("Company name required.")
@@ -581,7 +562,6 @@ def platform_create_business(request):
             errors.append("Company name taken.")
         if User.objects.filter(username__iexact=username).exists():
             errors.append("Username taken.")
-
         if errors:
             for e in errors:
                 messages.error(request, e)
@@ -595,6 +575,5 @@ def platform_create_business(request):
             )
             messages.success(request, f"Created ‘{company.name}’ – owner: {username}")
             return redirect("platform_create_business")
-
     companies = Company.objects.all().order_by("-created_at")
     return render(request, "inventory/platform_create_business.html", {"companies": companies})
