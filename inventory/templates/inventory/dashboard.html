@@ -13,17 +13,17 @@
 
 <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-            <div class="h-8 w-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-sm font-bold">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="h-8 w-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
                 {{ company.name|slice:":1"|upper }}
             </div>
-            <div>
-                <p class="font-semibold text-slate-900 text-sm leading-tight">{{ company.name }}</p>
+            <div class="min-w-0">
+                <p class="font-semibold text-slate-900 text-sm leading-tight truncate">{{ company.name }}</p>
                 <p class="text-[11px] text-slate-400 leading-tight">Stock Manager</p>
             </div>
         </div>
 
-        <nav class="hidden sm:flex items-center gap-1">
+        <nav class="hidden md:flex items-center gap-1">
             {% if can_view_reports %}
             <a href="{% url 'sales_report' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Reports</a>
             {% endif %}
@@ -38,8 +38,8 @@
             {% endif %}
         </nav>
 
-        <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400 hidden md:inline">{{ request.user.username }}</span>
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400 hidden sm:inline">{{ request.user.username }}</span>
             <form action="{% url 'logout' %}" method="post">
                 {% csrf_token %}
                 <button type="submit" class="text-xs text-slate-500 hover:text-slate-800 px-2 py-1 rounded hover:bg-slate-100 transition">Logout</button>
@@ -48,7 +48,7 @@
     </div>
 </header>
 
-<main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+<main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
 
     {% if messages %}
     <div class="space-y-2">
@@ -63,41 +63,41 @@
     </div>
     {% endif %}
 
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-white rounded-xl border border-slate-200/80 p-5">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Products</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900">{{ items.count }}</p>
+    <!-- Metrics -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5">
+            <p class="text-[11px] sm:text-xs font-medium text-slate-400 uppercase tracking-wide">Products</p>
+            <p class="mt-1 text-xl sm:text-2xl font-semibold text-slate-900">{{ items.count }}</p>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200/80 p-5">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Low Stock</p>
-            <p class="mt-1 text-2xl font-semibold {% if low_stock_count %}text-rose-600{% else %}text-slate-900{% endif %}">{{ low_stock_count }}</p>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5">
+            <p class="text-[11px] sm:text-xs font-medium text-slate-400 uppercase tracking-wide">Low Stock</p>
+            <p class="mt-1 text-xl sm:text-2xl font-semibold {% if low_stock_count %}text-rose-600{% else %}text-slate-900{% endif %}">{{ low_stock_count }}</p>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200/80 p-5">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Today’s Sales</p>
-            <p class="mt-1 text-2xl font-semibold text-emerald-600">UGX {{ today_sales_total|intcomma }}</p>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5">
+            <p class="text-[11px] sm:text-xs font-medium text-slate-400 uppercase tracking-wide">Today</p>
+            <p class="mt-1 text-xl sm:text-2xl font-semibold text-emerald-600">UGX {{ today_sales_total|intcomma }}</p>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200/80 p-5">
-            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide">Inventory Value</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-900">UGX {{ total_inventory_val|intcomma }}</p>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5">
+            <p class="text-[11px] sm:text-xs font-medium text-slate-400 uppercase tracking-wide">Value</p>
+            <p class="mt-1 text-xl sm:text-2xl font-semibold text-slate-900">UGX {{ total_inventory_val|intcomma }}</p>
         </div>
     </div>
 
     {% if can_manage_stock %}
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
-            <div class="px-5 py-3.5 border-b border-slate-100">
+            <div class="px-4 sm:px-5 py-3 border-b border-slate-100">
                 <h2 class="text-sm font-semibold text-slate-800">Add Stock</h2>
             </div>
-            <form action="{% url 'record_stock_in' %}" method="post" class="p-5 space-y-4">
+            <form action="{% url 'record_stock_in' %}" method="post" class="p-4 sm:p-5 space-y-3 sm:space-y-4">
                 {% csrf_token %}
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Product</label>
                     <input list="items_list" name="item_name" required placeholder="Name or select existing"
-                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 bg-slate-50/50">
+                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
                     <datalist id="items_list">{% for item in items %}<option value="{{ item.name }}">{% endfor %}</datalist>
                 </div>
-                <div class="grid grid-cols-3 gap-3">
+                <div class="grid grid-cols-3 gap-2 sm:gap-3">
                     <div>
                         <label class="block text-xs font-medium text-slate-500 mb-1">Qty</label>
                         <input type="number" name="quantity" min="1" value="1" required class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
@@ -123,10 +123,10 @@
         </div>
 
         <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden flex flex-col">
-            <div class="px-5 py-3.5 border-b border-slate-100">
+            <div class="px-4 sm:px-5 py-3 border-b border-slate-100">
                 <h2 class="text-sm font-semibold text-slate-800">Record Sale</h2>
             </div>
-            <form action="{% url 'record_sale' %}" method="post" class="p-5 space-y-4 flex-1">
+            <form action="{% url 'record_sale' %}" method="post" class="p-4 sm:p-5 space-y-3 sm:space-y-4 flex-1">
                 {% csrf_token %}
                 <div>
                     <label class="block text-xs font-medium text-slate-500 mb-1">Item</label>
@@ -147,83 +147,126 @@
                 </div>
                 <button type="submit" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition">Complete Sale</button>
             </form>
-            <div class="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
-                <p class="text-[11px] font-medium text-slate-400 uppercase mb-2">Recent</p>
-                <div class="space-y-1 max-h-20 overflow-y-auto">
-                    {% for sale in recent_sales %}
-                    <div class="flex justify-between text-xs">
-                        <span class="text-slate-700">{{ sale.quantity_sold }}× {{ sale.item.name }}</span>
-                        <span class="text-slate-400 font-mono">{{ sale.sell_price|intcomma }}</span>
+            <div class="px-4 sm:px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+                <p class="text-[11px] font-medium text-slate-400 uppercase mb-2">Recent activity</p>
+                <div class="space-y-1 max-h-24 overflow-y-auto">
+                    {% for a in recent_activity %}
+                    <div class="flex justify-between text-xs gap-2">
+                        <span class="text-slate-700 truncate">{{ a.message }}</span>
+                        <span class="text-slate-400 shrink-0">{{ a.created_at|timesince }} ago</span>
                     </div>
                     {% empty %}
-                    <p class="text-xs text-slate-400">No sales yet</p>
+                    <p class="text-xs text-slate-400">No activity yet</p>
                     {% endfor %}
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="bg-white rounded-xl border border-slate-200/80 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+    <div class="bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <div class="flex-1">
             <h2 class="text-sm font-semibold text-slate-800">AI Ledger Scanner</h2>
             <p class="text-xs text-slate-500 mt-0.5">Upload a photo of a handwritten stock book</p>
         </div>
-        <form action="{% url 'scan_ledger' %}" method="post" enctype="multipart/form-data" class="flex items-center gap-3">
+        <form action="{% url 'scan_ledger' %}" method="post" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 sm:gap-3">
             {% csrf_token %}
-            <input type="file" name="ledger_photo" accept="image/*" required class="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700">
-            <button type="submit" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg transition whitespace-nowrap">Scan</button>
+            <input type="file" name="ledger_photo" accept="image/*" required class="text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700">
+            <button type="submit" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-medium rounded-lg transition">Scan</button>
         </form>
     </div>
     {% endif %}
 
+    <!-- Inventory with search -->
     <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
-        <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-slate-800">Inventory</h2>
-            <span class="text-xs text-slate-400">{{ items.count }} items</span>
+        <div class="px-4 sm:px-5 py-3 border-b border-slate-100 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <h2 class="text-sm font-semibold text-slate-800">Inventory</h2>
+                <div class="flex items-center gap-2">
+                    {% if can_view_reports %}
+                    <a href="{% url 'export_inventory_csv' %}" class="text-xs text-slate-500 hover:text-emerald-600 transition">Export CSV</a>
+                    {% endif %}
+                    <span class="text-xs text-slate-400">{{ items.count }} shown</span>
+                </div>
+            </div>
+            <form method="get" class="flex flex-wrap gap-2">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search products…"
+                    class="flex-1 min-w-[140px] px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
+                <select name="category" class="px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/40">
+                    <option value="">All categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if selected_category == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+                <label class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50/50 cursor-pointer">
+                    <input type="checkbox" name="low" value="1" {% if low_only %}checked{% endif %} class="rounded border-slate-300 text-emerald-600 scale-90">
+                    Low stock
+                </label>
+                <button type="submit" class="px-3 py-1.5 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition">Filter</button>
+                {% if q or selected_category or low_only %}
+                <a href="{% url 'dashboard' %}" class="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-800">Clear</a>
+                {% endif %}
+            </form>
         </div>
+
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="text-left text-xs text-slate-400 border-b border-slate-100">
-                        <th class="px-5 py-3 font-medium">Product</th>
-                        <th class="px-5 py-3 font-medium">Category</th>
-                        <th class="px-5 py-3 font-medium">Buy</th>
-                        <th class="px-5 py-3 font-medium">Sell</th>
-                        <th class="px-5 py-3 font-medium">Stock</th>
-                        {% if can_edit_items %}<th class="px-5 py-3 font-medium"></th>{% endif %}
+                        <th class="px-4 sm:px-5 py-3 font-medium">Product</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium hidden sm:table-cell">Category</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium">Buy</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium">Sell</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium">Stock</th>
+                        {% if can_edit_items %}<th class="px-4 sm:px-5 py-3 font-medium"></th>{% endif %}
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
                     {% for item in items %}
                     <tr class="hover:bg-slate-50/80 transition">
-                        <td class="px-5 py-3.5 font-medium text-slate-900">{{ item.name }}</td>
-                        <td class="px-5 py-3.5 text-slate-500">{{ item.category.name|default:"—" }}</td>
-                        <td class="px-5 py-3.5 font-mono text-xs text-slate-500">{{ item.buy_price|intcomma }}</td>
-                        <td class="px-5 py-3.5 font-mono text-xs text-slate-500">{{ item.sell_price|intcomma }}</td>
-                        <td class="px-5 py-3.5">
+                        <td class="px-4 sm:px-5 py-3 font-medium text-slate-900">{{ item.name }}</td>
+                        <td class="px-4 sm:px-5 py-3 text-slate-500 hidden sm:table-cell">{{ item.category.name|default:"—" }}</td>
+                        <td class="px-4 sm:px-5 py-3 font-mono text-xs text-slate-500">{{ item.buy_price|intcomma }}</td>
+                        <td class="px-4 sm:px-5 py-3 font-mono text-xs text-slate-500">{{ item.sell_price|intcomma }}</td>
+                        <td class="px-4 sm:px-5 py-3">
                             {% if item.quantity_in_stock == 0 %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700">0</span>
+                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700">0</span>
                             {% elif item.quantity_in_stock <= item.reorder_level %}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{{ item.quantity_in_stock }}</span>
+                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{{ item.quantity_in_stock }}</span>
                             {% else %}
                             <span class="text-slate-700">{{ item.quantity_in_stock }}</span>
                             {% endif %}
                         </td>
                         {% if can_edit_items %}
-                        <td class="px-5 py-3.5">
+                        <td class="px-4 sm:px-5 py-3">
                             <a href="{% url 'edit_item' item.id %}" class="text-xs text-slate-400 hover:text-emerald-600 transition">Edit</a>
                         </td>
                         {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-5 py-12 text-center text-slate-400 text-sm">No products yet</td>
+                        <td colspan="6" class="px-5 py-12 text-center">
+                            <p class="text-slate-500 text-sm font-medium">No products yet</p>
+                            <p class="text-slate-400 text-xs mt-1 max-w-xs mx-auto">
+                                {% if can_manage_stock %}
+                                Add your first item using the form above, or scan a handwritten ledger.
+                                {% else %}
+                                Ask an owner to add stock or grant you stock permissions.
+                                {% endif %}
+                            </p>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <!-- Mobile nav -->
+    <nav class="md:hidden flex justify-center gap-4 pt-2 pb-6 text-xs text-slate-500">
+        {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="hover:text-slate-800">Reports</a>{% endif %}
+        {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="hover:text-slate-800">Categories</a>{% endif %}
+        {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="hover:text-slate-800">Team</a>{% endif %}
+    </nav>
 
 </main>
 </body>
