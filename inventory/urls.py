@@ -20,6 +20,8 @@ urlpatterns = [
     path("billing/", views.billing, name="billing"),
     path("billing/claim/", views.claim_payment, name="claim_payment"),
 
+    path("import/", views.import_inventory, name="import_inventory"),
+
     path("export/inventory/", views.export_inventory_csv, name="export_inventory_csv"),
     path("export/sales/", views.export_sales_csv, name="export_sales_csv"),
 
