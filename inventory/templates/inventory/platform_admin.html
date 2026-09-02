@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform Admin – Cloud Stock Manager</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23f59e0b'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' font-family='system-ui,sans-serif' font-weight='700' fill='white'%3EPA%3C/text%3E%3C/svg%3E">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style> body { font-family: 'Inter', system-ui, sans-serif; } </style>
@@ -37,8 +38,7 @@
     </div>
     {% endif %}
 
-    <!-- Metrics -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div class="bg-white rounded-xl border border-slate-200/80 p-4">
             <p class="text-[11px] font-medium text-slate-400 uppercase">Businesses</p>
             <p class="mt-1 text-2xl font-semibold text-slate-900">{{ stats.companies }}</p>
@@ -55,6 +55,37 @@
             <p class="text-[11px] font-medium text-slate-400 uppercase">Pending pay</p>
             <p class="mt-1 text-2xl font-semibold {% if stats.pending %}text-amber-600{% else %}text-slate-900{% endif %}">{{ stats.pending }}</p>
         </div>
+        <div class="bg-white rounded-xl border border-slate-200/80 p-4">
+            <p class="text-[11px] font-medium text-slate-400 uppercase">Online now</p>
+            <p class="mt-1 text-2xl font-semibold {% if online_users %}text-emerald-600{% else %}text-slate-900{% endif %}">{{ online_users|length }}</p>
+        </div>
+    </div>
+
+    <!-- Who is online -->
+    <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 flex justify-between items-center">
+            <h2 class="text-sm font-semibold text-slate-800">Currently online</h2>
+            <span class="text-xs text-slate-400">Active in last 5 min</span>
+        </div>
+        {% if online_users %}
+        <ul class="divide-y divide-slate-50">
+            {% for p in online_users %}
+            <li class="px-5 py-3 flex items-center justify-between text-sm">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="h-2 w-2 rounded-full bg-emerald-500 shrink-0"></span>
+                    <span class="font-medium text-slate-900 truncate">{{ p.user.username }}</span>
+                    <span class="text-xs text-slate-400 truncate">{{ p.company.name }}</span>
+                </div>
+                <span class="text-[11px] text-slate-400 shrink-0">{{ p.last_seen|timesince }} ago</span>
+            </li>
+            {% endfor %}
+        </ul>
+        <p class="px-5 py-2 text-[11px] text-slate-400 border-t border-slate-50">
+            Tip: avoid deploying on Railway while people are online. Data is safe (PostgreSQL); a deploy only briefly restarts the app.
+        </p>
+        {% else %}
+        <p class="px-5 py-8 text-center text-sm text-slate-400">Nobody online right now — good time to deploy if needed</p>
+        {% endif %}
     </div>
 
     <!-- Pending MoMo -->
@@ -85,11 +116,11 @@
             {% endfor %}
         </ul>
         {% else %}
-        <p class="px-5 py-8 text-center text-sm text-slate-400">No pending claims — check when you get a MoMo SMS</p>
+        <p class="px-5 py-8 text-center text-sm text-slate-400">No pending claims</p>
         {% endif %}
     </div>
 
-    <!-- All subscriptions / companies -->
+    <!-- All businesses -->
     <div class="bg-white rounded-xl border border-slate-200/80 overflow-hidden">
         <div class="px-5 py-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <h2 class="text-sm font-semibold text-slate-800">All businesses</h2>

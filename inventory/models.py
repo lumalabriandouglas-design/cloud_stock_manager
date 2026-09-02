@@ -27,7 +27,7 @@ class Company(models.Model):
 class Subscription(models.Model):
     STATUS_TRIAL = "trial"
     STATUS_ACTIVE = "active"
-    STATUS_PENDING = "pending"  # customer claimed payment, waiting for admin
+    STATUS_PENDING = "pending"
     STATUS_PAST_DUE = "past_due"
     STATUS_SUSPENDED = "suspended"
     STATUS_CHOICES = [
@@ -46,7 +46,6 @@ class Subscription(models.Model):
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
     last_payment_at = models.DateTimeField(null=True, blank=True)
-    # Manual MoMo claim
     payment_phone = models.CharField(max_length=20, blank=True)
     payment_tx_id = models.CharField(max_length=100, blank=True)
     payment_note = models.CharField(max_length=255, blank=True)
@@ -67,13 +66,15 @@ class Subscription(models.Model):
 
     @property
     def is_active(self):
+        """True only during valid trial or paid period. Pending/suspended/expired = False."""
         now = timezone.now()
         if self.status == self.STATUS_ACTIVE:
             if self.current_period_end and self.current_period_end < now:
                 return False
             return True
         if self.status == self.STATUS_TRIAL:
-            return self.trial_ends_at and self.trial_ends_at >= now
+            return bool(self.trial_ends_at and self.trial_ends_at >= now)
+        # pending, past_due, suspended
         return False
 
     def claim_payment(self, phone="", tx_id="", note=""):
@@ -113,6 +114,7 @@ class UserProfile(models.Model):
     can_view_reports = models.BooleanField(default=True)
     can_manage_categories = models.BooleanField(default=False)
     can_manage_team = models.BooleanField(default=False)
+    last_seen = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} ({self.company.name}) – {self.get_role_display()}"
@@ -125,6 +127,12 @@ class UserProfile(models.Model):
         if self.is_owner:
             return True
         return getattr(self, perm_name, False)
+
+    @property
+    def is_online(self):
+        if not self.last_seen:
+            return False
+        return (timezone.now() - self.last_seen).total_seconds() < 300  # 5 minutes
 
 
 class Category(models.Model):
