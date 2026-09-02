@@ -2,6 +2,8 @@ import csv
 import json
 import os
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
+import io
 
 from django.contrib import messages
 from django.contrib.auth import login
@@ -93,19 +95,16 @@ def notify_low_stock(company, item):
         return
     if item.quantity_in_stock > item.reorder_level:
         return
-    owners = UserProfile.objects.filter(
-        company=company, role=UserProfile.ROLE_OWNER
-    ).select_related("user")
+    owners = UserProfile.objects.filter(company=company, role=UserProfile.ROLE_OWNER).select_related("user")
     emails = [p.user.email for p in owners if p.user.email]
     if not emails:
         return
-    subject = f"[{company.name}] Low stock: {item.name}"
-    body = (
-        f"Item: {item.name}\nCurrent stock: {item.quantity_in_stock}\n"
-        f"Reorder level: {item.reorder_level}\n\nPlease restock soon.\n\n- Cloud Stock Manager"
-    )
     try:
-        send_mail(subject, body, None, emails, fail_silently=True)
+        send_mail(
+            f"[{company.name}] Low stock: {item.name}",
+            f"Item: {item.name}\nCurrent stock: {item.quantity_in_stock}\nReorder level: {item.reorder_level}\n",
+            None, emails, fail_silently=True,
+        )
     except Exception:
         pass
 
@@ -114,14 +113,12 @@ def notify_admin_payment_claim(company, sub):
     admin_email = os.getenv("PAYMENT_NOTIFY_EMAIL", "")
     if not admin_email:
         return
-    subject = f"[Payment claim] {company.name} - UGX {Subscription.PLAN_AMOUNT_UGX:,}"
-    body = (
-        f"Company: {company.name}\nPhone: {sub.payment_phone or '-'}\n"
-        f"Tx ID: {sub.payment_tx_id or '-'}\nNote: {sub.payment_note or '-'}\n"
-        f"Claimed at: {sub.payment_claimed_at}\n\nActivate from Platform Admin when confirmed.\n"
-    )
     try:
-        send_mail(subject, body, None, [admin_email], fail_silently=True)
+        send_mail(
+            f"[Payment claim] {company.name} - UGX {Subscription.PLAN_AMOUNT_UGX:,}",
+            f"Company: {company.name}\nPhone: {sub.payment_phone or '-'}\nTx: {sub.payment_tx_id or '-'}\n",
+            None, [admin_email], fail_silently=True,
+        )
     except Exception:
         pass
 
@@ -161,7 +158,7 @@ def register(request):
             can_manage_categories=True, can_manage_team=True,
         )
         login(request, user)
-        messages.success(request, f"Welcome! Your 7-day free trial has started. Plan is UGX {Subscription.PLAN_AMOUNT_UGX:,}/month after trial.")
+        messages.success(request, f"Welcome! 7-day trial started. Plan UGX {Subscription.PLAN_AMOUNT_UGX:,}/month after trial.")
         return redirect("dashboard")
     return render(request, "inventory/register.html")
 
@@ -221,7 +218,7 @@ def dashboard(request):
     total_inventory_val = sum(i.quantity_in_stock * i.buy_price for i in all_items)
     sub = company.subscription
     sub_active = company.is_subscription_active()
-    context = {
+    return render(request, "inventory/dashboard.html", {
         "company": company, "items": items, "categories": categories,
         "recent_activity": recent_activity, "low_stock_items": low_stock_items,
         "low_stock_count": low_stock_count, "total_inventory_val": total_inventory_val,
@@ -229,8 +226,7 @@ def dashboard(request):
         "is_platform_admin": request.user.is_superuser, "q": q,
         "selected_category": category_id, "low_only": low_only,
         "subscription": sub, "sub_active": sub_active, **perm_context(profile),
-    }
-    return render(request, "inventory/dashboard.html", context)
+    })
 
 
 @login_required
@@ -239,9 +235,7 @@ def billing(request):
     if profile is None:
         return redirect("setup_company")
     company = profile.company
-    sub = company.subscription
-    if sub is None:
-        sub = Subscription.start_trial(company)
+    sub = company.subscription or Subscription.start_trial(company)
     return render(request, "inventory/billing.html", {
         "company": company, "subscription": sub, "sub_active": sub.is_active,
         "plan_amount": Subscription.PLAN_AMOUNT_UGX, "profile": profile, **perm_context(profile),
@@ -263,8 +257,165 @@ def claim_payment(request):
         note=request.POST.get("payment_note", "").strip(),
     )
     notify_admin_payment_claim(company, sub)
-    messages.success(request, "Thanks! Payment claim received. We will activate after confirming MoMo.")
+    messages.success(request, "Payment claim received. We will activate after confirming MoMo.")
     return redirect("billing")
+
+
+def _norm_header(h):
+    if h is None:
+        return ""
+    return str(h).strip().lower().replace(" ", "_")
+
+
+def _parse_rows_from_csv(file_obj):
+    raw = file_obj.read()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(raw))
+    return [{_norm_header(k): (v or "").strip() for k, v in row.items() if k} for row in reader]
+
+
+def _parse_rows_from_xlsx(file_obj):
+    from openpyxl import load_workbook
+    wb = load_workbook(file_obj, read_only=True, data_only=True)
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+    try:
+        headers = [_norm_header(h) for h in next(rows_iter)]
+    except StopIteration:
+        return []
+    rows = []
+    for values in rows_iter:
+        if not values or all(v is None or str(v).strip() == "" for v in values):
+            continue
+        row = {}
+        for i, h in enumerate(headers):
+            if not h:
+                continue
+            val = values[i] if i < len(values) else None
+            row[h] = "" if val is None else str(val).strip()
+        rows.append(row)
+    return rows
+
+
+def _parse_rows_from_pdf(file_obj):
+    import pdfplumber
+    rows = []
+    with pdfplumber.open(file_obj) as pdf:
+        for page in pdf.pages:
+            for table in (page.extract_tables() or []):
+                if not table or len(table) < 2:
+                    continue
+                headers = [_norm_header(h) for h in table[0]]
+                for data in table[1:]:
+                    if not data or all(c is None or str(c).strip() == "" for c in data):
+                        continue
+                    row = {}
+                    for i, h in enumerate(headers):
+                        if not h:
+                            continue
+                        val = data[i] if i < len(data) else None
+                        row[h] = "" if val is None else str(val).strip()
+                    rows.append(row)
+    return rows
+
+
+def _row_get(row, *keys, default=""):
+    for k in keys:
+        if k in row and row[k] != "":
+            return row[k]
+    return default
+
+
+def _to_decimal(val, default=0):
+    if val is None or val == "":
+        return Decimal(str(default))
+    s = str(val).replace(",", "").replace("UGX", "").strip()
+    try:
+        return Decimal(s)
+    except (InvalidOperation, ValueError):
+        return Decimal(str(default))
+
+
+def _to_int(val, default=0):
+    try:
+        return int(float(str(val).replace(",", "").strip()))
+    except (ValueError, TypeError):
+        return default
+
+
+@login_required
+@require_perm("can_manage_stock")
+@require_active_sub
+def import_inventory(request):
+    profile = get_profile(request)
+    company = profile.company
+    if request.method == "POST":
+        f = request.FILES.get("import_file")
+        if not f:
+            messages.error(request, "Please choose a file.")
+            return redirect("import_inventory")
+        name = (f.name or "").lower()
+        try:
+            if name.endswith(".csv"):
+                rows = _parse_rows_from_csv(f)
+            elif name.endswith(".xlsx") or name.endswith(".xls"):
+                rows = _parse_rows_from_xlsx(f)
+            elif name.endswith(".pdf"):
+                rows = _parse_rows_from_pdf(f)
+            else:
+                messages.error(request, "Unsupported type. Use CSV, Excel (.xlsx), or PDF.")
+                return redirect("import_inventory")
+        except Exception as e:
+            messages.error(request, f"Could not read file: {e}")
+            return redirect("import_inventory")
+        if not rows:
+            messages.error(request, "No data rows found. Need a header row and data.")
+            return redirect("import_inventory")
+        created = updated = skipped = 0
+        for row in rows:
+            product = _row_get(row, "name", "product", "item", "product_name", "item_name")
+            if not product:
+                skipped += 1
+                continue
+            normalized = " ".join(str(product).split()).title()
+            buy = _to_decimal(_row_get(row, "buy_price", "buy", "cost", "cost_price"))
+            sell = _to_decimal(_row_get(row, "sell_price", "sell", "price", "selling_price"))
+            qty = _to_int(_row_get(row, "quantity", "qty", "stock", "quantity_in_stock"), 0)
+            reorder = _to_int(_row_get(row, "reorder_level", "reorder", "min_stock"), 5)
+            cat_name = _row_get(row, "category", "cat")
+            category = None
+            if cat_name:
+                category, _ = Category.objects.get_or_create(company=company, name=str(cat_name).strip().title())
+            item, is_new = Item.objects.get_or_create(
+                company=company, name=normalized,
+                defaults={
+                    "category": category, "buy_price": buy, "sell_price": sell,
+                    "quantity_in_stock": max(0, qty), "reorder_level": reorder if reorder > 0 else 5,
+                },
+            )
+            if is_new:
+                created += 1
+                if qty > 0:
+                    StockIn.objects.create(company=company, item=item, quantity_added=qty)
+            else:
+                updated += 1
+                if qty > 0:
+                    item.quantity_in_stock += qty
+                    StockIn.objects.create(company=company, item=item, quantity_added=qty)
+                if buy > 0:
+                    item.buy_price = buy
+                if sell > 0:
+                    item.sell_price = sell
+                if category and not item.category:
+                    item.category = category
+                if reorder > 0:
+                    item.reorder_level = reorder
+                item.save()
+        log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"Import: {created} new, {updated} updated")
+        messages.success(request, f"Import done: {created} created, {updated} updated" + (f", {skipped} skipped." if skipped else "."))
+        return redirect("dashboard")
+    return render(request, "inventory/import_inventory.html", {"company": company, "profile": profile, **perm_context(profile)})
 
 
 @login_required
@@ -325,7 +476,7 @@ def manage_team(request):
         elif action == "update_perms":
             member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.is_owner:
-                messages.error(request, "Cannot change permissions of an Owner.")
+                messages.error(request, "Cannot change Owner permissions.")
             else:
                 member.can_manage_stock = request.POST.get("can_manage_stock") == "on"
                 member.can_edit_items = request.POST.get("can_edit_items") == "on"
@@ -333,7 +484,7 @@ def manage_team(request):
                 member.can_manage_categories = request.POST.get("can_manage_categories") == "on"
                 member.can_manage_team = request.POST.get("can_manage_team") == "on"
                 member.save()
-                messages.success(request, f"Permissions updated for {member.user.username}.")
+                messages.success(request, f"Updated {member.user.username}.")
         elif action == "remove":
             member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.user == request.user:
@@ -375,8 +526,7 @@ def manage_categories(request):
             else:
                 messages.error(request, "Invalid or duplicate name.")
         elif action == "delete":
-            cat = get_object_or_404(Category, id=request.POST.get("category_id"), company=company)
-            cat.delete()
+            get_object_or_404(Category, id=request.POST.get("category_id"), company=company).delete()
             messages.success(request, "Deleted.")
         return redirect("manage_categories")
     return render(request, "inventory/manage_categories.html", {"company": company, "categories": categories, "profile": profile, **perm_context(profile)})
@@ -434,11 +584,10 @@ def sales_report(request):
     sales = Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date")
     total_revenue = sum(s.line_total for s in sales)
     total_cost = sum(s.estimated_cost for s in sales)
-    total_profit = total_revenue - total_cost
-    total_qty = sum(s.quantity_sold for s in sales)
     return render(request, "inventory/sales_report.html", {
-        "company": company, "sales": sales, "days": days, "total_revenue": total_revenue,
-        "total_cost": total_cost, "total_profit": total_profit, "total_qty": total_qty,
+        "company": company, "sales": sales, "days": days,
+        "total_revenue": total_revenue, "total_cost": total_cost,
+        "total_profit": total_revenue - total_cost, "total_qty": sum(s.quantity_sold for s in sales),
         "profile": profile, "is_platform_admin": request.user.is_superuser, **perm_context(profile),
     })
 
@@ -517,7 +666,7 @@ def scan_ledger(request):
         try:
             img = Image.open(photo)
             client = genai.Client(api_key=api_key)
-            prompt = 'Analyze this handwritten stock ledger. Return strict JSON list of products with: name (string), buy_price (number default 0), sell_price (number default 0), quantity (integer default 1).'
+            prompt = 'Analyze this handwritten stock ledger. Return strict JSON list: name, buy_price, sell_price, quantity.'
             response = client.models.generate_content(
                 model="gemini-2.0-flash", contents=[prompt, img],
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
@@ -563,15 +712,10 @@ def platform_admin(request):
         "trial": sum(1 for s in all_subs if s.status == Subscription.STATUS_TRIAL and s.is_active),
         "pending": pending_subs.count(),
     }
-    company_rows = []
-    for c in companies:
-        sub = getattr(c, "sub", None)
-        company_rows.append({"company": c, "sub": sub, "active": c.is_subscription_active(), "users": c.users.count()})
+    company_rows = [{"company": c, "sub": getattr(c, "sub", None), "active": c.is_subscription_active(), "users": c.users.count()} for c in companies]
     cutoff = timezone.now() - timezone.timedelta(minutes=5)
     online_users = UserProfile.objects.filter(last_seen__gte=cutoff).select_related("user", "company").order_by("-last_seen")
-    return render(request, "inventory/platform_admin.html", {
-        "stats": stats, "pending_subs": pending_subs, "company_rows": company_rows, "online_users": online_users,
-    })
+    return render(request, "inventory/platform_admin.html", {"stats": stats, "pending_subs": pending_subs, "company_rows": company_rows, "online_users": online_users})
 
 
 @login_required
@@ -600,11 +744,7 @@ def platform_create_business(request):
             company = Company.objects.create(name=company_name)
             Subscription.start_trial(company)
             user = User.objects.create_user(username=username, email=email or "", password=password)
-            UserProfile.objects.create(
-                user=user, company=company, role=UserProfile.ROLE_OWNER,
-                can_manage_stock=True, can_edit_items=True, can_view_reports=True,
-                can_manage_categories=True, can_manage_team=True,
-            )
+            UserProfile.objects.create(user=user, company=company, role=UserProfile.ROLE_OWNER, can_manage_stock=True, can_edit_items=True, can_view_reports=True, can_manage_categories=True, can_manage_team=True)
             messages.success(request, f"Created '{company.name}' - owner: {username}")
             return redirect("platform_admin")
     companies = Company.objects.all().order_by("-created_at")
