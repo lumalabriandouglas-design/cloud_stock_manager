@@ -1,68 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create account – Cloud Stock Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Inter', system-ui, sans-serif; } </style>
-</head>
-<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 antialiased">
-    <div class="w-full max-w-sm">
-        <div class="text-center mb-8">
-            <div class="inline-flex h-11 w-11 rounded-xl bg-emerald-600 items-center justify-center text-white font-bold text-lg mb-3">CS</div>
-            <h1 class="text-xl font-semibold text-slate-900">Create your business</h1>
-            <p class="text-sm text-slate-500 mt-1">Start managing stock in minutes</p>
+{% extends "inventory/base.html" %}
+{% block title %}Create account – Cloud Stock Manager{% endblock %}
+{% block content %}
+<div class="mx-auto w-full max-w-md">
+    <p class="text-xs font-medium uppercase tracking-wide text-muted">Cloud Stock Manager</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Create account</h1>
+    <p class="mt-2 text-sm text-muted">One account for this shop ledger. Invited staff can skip the business name.</p>
+    <div class="card mt-6 p-5 sm:p-8">
+        <a href="{% url 'google_start' %}" class="flex h-12 w-full items-center justify-center gap-3 rounded-md bg-white text-sm font-medium shadow-card">Continue with Google</a>
+        <div class="my-6 flex items-center gap-3 text-xs uppercase tracking-wide text-muted">
+            <span class="h-px flex-1 bg-line"></span>or email<span class="h-px flex-1 bg-line"></span>
         </div>
-
-        <div class="bg-white rounded-xl border border-slate-200/80 p-6 shadow-sm">
-            {% if messages %}
-            <div class="mb-4 space-y-2">
-                {% for message in messages %}
-                <div class="rounded-lg px-3 py-2.5 text-sm bg-rose-50 text-rose-700 border border-rose-100">{{ message }}</div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <form method="post" class="space-y-4">
-                {% csrf_token %}
-                <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">Business name</label>
-                    <input type="text" name="company_name" required placeholder="e.g. Quality Star Electronics"
-                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
-                    <input type="text" name="username" required
-                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">Email (optional)</label>
-                    <input type="email" name="email"
-                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
-                        <input type="password" name="password" required minlength="6"
-                            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-500 mb-1">Confirm</label>
-                        <input type="password" name="password2" required minlength="6"
-                            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                    </div>
-                </div>
-                <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">
-                    Create account
-                </button>
-            </form>
-        </div>
-
-        <p class="text-center text-sm text-slate-500 mt-6">
-            Already have an account? <a href="{% url 'login' %}" class="text-emerald-600 font-medium hover:underline">Sign in</a>
-        </p>
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Business name</span>
+                <input type="text" name="company_name" placeholder="e.g. Quality Star Electronics" class="field h-12"></label>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Name / username</span>
+                <input type="text" name="username" required class="field h-12"></label>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Email</span>
+                <input type="email" name="email" class="field h-12"></label>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Password</span>
+                <input type="password" name="password" required minlength="6" class="field h-12"></label>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Confirm password</span>
+                <input type="password" name="password2" required minlength="6" class="field h-12"></label>
+            <button type="submit" class="btn-primary h-12 w-full text-base">Create account</button>
+        </form>
     </div>
-</body>
-</html>
+    <p class="mt-6 text-center text-sm text-muted">
+        <a href="{% url 'login' %}" class="font-medium text-primary">Already have an account? Sign in</a>
+    </p>
+</div>
+{% endblock %}

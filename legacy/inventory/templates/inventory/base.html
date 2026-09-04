@@ -1,0 +1,104 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ company.name|default:"Cloud Stock Manager" }}{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23215c45'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='14' font-family='Georgia' font-weight='700' fill='%23f6f3ea'%3ES%3C/text%3E%3C/svg%3E">
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              bg: "#f3eee4",
+              surface: "#fffdf8",
+              ink: "#1c1914",
+              muted: "#6d675c",
+              line: "#ddd4c4",
+              primary: "#215c45",
+              "primary-fg": "#f6f3ea",
+              accent: "#b4532a",
+              warn: "#8a5a12",
+              "warn-bg": "#f4e6c8",
+              danger: "#9b2c2c",
+              "danger-bg": "#f6dede",
+              good: "#215c45",
+              "good-bg": "#dceadf",
+            },
+            fontFamily: {
+              serif: ["Fraunces", "Times New Roman", "serif"],
+              sans: ["Source Sans 3", "Segoe UI", "sans-serif"],
+            },
+            boxShadow: {
+              card: "0 0 0 1px rgba(28,25,20,.06), 0 1px 2px -1px rgba(28,25,20,.06), 0 8px 20px -12px rgba(28,25,20,.12)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body { font-family: "Source Sans 3", "Segoe UI", sans-serif; background: #f3eee4; color: #1c1914; }
+      h1, h2, h3 { font-family: "Fraunces", "Times New Roman", serif; }
+      .field { height: 2.75rem; width: 100%; border-radius: 0.5rem; border: 1px solid #ddd4c4; background: #f3eee4; padding: 0 0.75rem; font-size: 0.875rem; }
+      .field:focus { outline: none; border-color: #215c45; box-shadow: 0 0 0 3px rgba(33,92,69,.15); }
+      .btn-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; border-radius: 0.5rem; background: #215c45; color: #f6f3ea; font-weight: 600; font-size: 0.875rem; padding: 0 1rem; }
+      .btn-primary:disabled { opacity: .4; }
+      .card { background: #fffdf8; border-radius: 0.875rem; box-shadow: 0 0 0 1px rgba(28,25,20,.06), 0 8px 20px -12px rgba(28,25,20,.12); }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-dvh bg-bg text-ink antialiased pb-16 md:pb-0">
+{% if company %}
+<header class="sticky top-0 z-30 border-b border-line/80 bg-bg/90 backdrop-blur-md">
+    <div class="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
+        <a href="{% url 'dashboard' %}" class="flex min-w-0 items-center gap-3">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary font-serif text-sm font-semibold text-primary-fg">{{ company.name|slice:":1"|upper }}</div>
+            <div class="min-w-0">
+                <p class="truncate font-serif text-base font-semibold leading-tight">{{ company.name }}</p>
+                <p class="text-xs leading-tight text-muted">Shop book</p>
+            </div>
+        </a>
+        <div class="flex shrink-0 items-center gap-1">
+            <nav class="hidden items-center gap-1 md:flex">
+                <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'dashboard' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:text-ink{% endif %}">Inventory</a>
+                {% if can_view_reports %}<a href="{% url 'today' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'today' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:text-ink{% endif %}">Today</a>{% endif %}
+                {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'sales_report' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:text-ink{% endif %}">Reports</a>{% endif %}
+                {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Categories</a>{% endif %}
+                {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Team</a>{% endif %}
+                <a href="{% url 'billing' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Billing</a>
+                {% if is_platform_admin %}<a href="{% url 'platform_admin' %}" class="rounded-md px-3 py-2 text-sm text-accent">Platform</a>{% endif %}
+            </nav>
+            <span class="hidden text-xs text-muted sm:inline">{{ request.user.username }}</span>
+            <form action="{% url 'logout' %}" method="post">{% csrf_token %}
+                <button class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Sign out</button>
+            </form>
+        </div>
+    </div>
+</header>
+{% endif %}
+
+<main class="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+    {% if messages %}
+    <div class="mb-6 space-y-2">{% for message in messages %}
+        <div class="rounded-md px-4 py-3 text-sm {% if message.tags == 'success' %}bg-good-bg text-primary{% elif message.tags == 'error' %}bg-danger-bg text-danger{% else %}bg-warn-bg text-warn{% endif %}">{{ message }}</div>
+    {% endfor %}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+</main>
+
+{% if company %}
+<nav class="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg md:hidden">
+    <div class="flex h-14 items-center justify-around text-[11px]">
+        <a href="{% url 'dashboard' %}" class="font-medium text-primary">Stock</a>
+        {% if can_view_reports %}<a href="{% url 'today' %}" class="text-muted">Today</a>{% endif %}
+        {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="text-muted">Reports</a>{% endif %}
+        {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="text-muted">Team</a>{% endif %}
+        <a href="{% url 'billing' %}" class="text-muted">Billing</a>
+    </div>
+</nav>
+{% endif %}
+</body>
+</html>

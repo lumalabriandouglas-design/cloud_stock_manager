@@ -1,55 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign in – Cloud Stock Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Inter', system-ui, sans-serif; } </style>
-</head>
-<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 antialiased">
-    <div class="w-full max-w-sm">
-        <div class="text-center mb-8">
-            <div class="inline-flex h-11 w-11 rounded-xl bg-emerald-600 items-center justify-center text-white font-bold text-lg mb-3">CS</div>
-            <h1 class="text-xl font-semibold text-slate-900">Cloud Stock Manager</h1>
-            <p class="text-sm text-slate-500 mt-1">Sign in to your account</p>
+{% extends "inventory/base.html" %}
+{% block title %}Sign in – Cloud Stock Manager{% endblock %}
+{% block content %}
+<div class="mx-auto w-full max-w-md">
+    <p class="text-xs font-medium uppercase tracking-wide text-muted">Cloud Stock Manager</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Sign in</h1>
+    <p class="mt-2 text-sm text-muted">Use the same email or username from the live shop.</p>
+    <div class="card mt-6 p-5 sm:p-8">
+        {% if form.errors %}
+        <p class="mb-4 rounded-md bg-danger-bg px-3 py-2 text-sm text-danger">Invalid username or password.</p>
+        {% endif %}
+        <a href="{% url 'google_start' %}" class="flex h-12 w-full items-center justify-center gap-3 rounded-md bg-white text-sm font-medium shadow-card">
+            Continue with Google
+        </a>
+        <div class="my-6 flex items-center gap-3 text-xs uppercase tracking-wide text-muted">
+            <span class="h-px flex-1 bg-line"></span>or email<span class="h-px flex-1 bg-line"></span>
         </div>
-
-        <div class="bg-white rounded-xl border border-slate-200/80 p-6 shadow-sm">
-            {% if form.errors %}
-            <div class="mb-4 rounded-lg px-3 py-2.5 text-sm bg-rose-50 text-rose-700 border border-rose-100">
-                Invalid username or password.
-            </div>
-            {% endif %}
-
-            <form method="post" action="{% url 'login' %}" class="space-y-4">
-                {% csrf_token %}
-                <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">Username or email</label>
-                    <input type="text" name="username" required autofocus
-                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">Password</label>
-                    <input type="password" name="password" required
-                        class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
-                </div>
-                <div class="flex justify-end">
-                    <a href="{% url 'password_reset_request' %}" class="text-xs text-emerald-600 font-medium">Forgot password?</a>
-                </div>
-                <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">
-                    Sign in
-                </button>
-            </form>
-            <a href="{% url 'google_start' %}" class="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-800 hover:bg-slate-50">
-                Continue with Google
-            </a>
-        </div>
-
-        <p class="text-center text-sm text-slate-500 mt-6">
-            New business? <a href="{% url 'register' %}" class="text-emerald-600 font-medium hover:underline">Create an account</a>
-        </p>
+        <form method="post" action="{% url 'login' %}" class="space-y-4">
+            {% csrf_token %}
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Email or username</span>
+                <input type="text" name="username" required autofocus class="field h-12"></label>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Password</span>
+                <input type="password" name="password" required class="field h-12"></label>
+            <div class="flex justify-end"><a href="{% url 'password_reset_request' %}" class="text-sm font-medium text-primary">Forgot password?</a></div>
+            <button type="submit" class="btn-primary h-12 w-full text-base">Sign in</button>
+        </form>
     </div>
-</body>
-</html>
+    <p class="mt-6 text-center text-sm text-muted">
+        <a href="{% url 'register' %}" class="font-medium text-primary">New here? Create an account</a>
+    </p>
+</div>
+{% endblock %}
