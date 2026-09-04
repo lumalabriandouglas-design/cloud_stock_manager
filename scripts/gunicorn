@@ -1,0 +1,5 @@
+#!/bin/sh
+# Railway still has the old Django start command (`gunicorn ...`) on this
+# service. That command is not the shop app anymore. Start the Node server
+# instead of failing with "gunicorn could not be found".
+exec node /app/scripts/start-railway.mjs

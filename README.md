@@ -6,9 +6,11 @@ Shop ledger (inventory + sales). The previous Django project is in `legacy/`.
 
 In the service settings:
 
-1. Builder: **Dockerfile** (this repo includes one on Node 22 — the old Node 20 image cannot build Vite 8)
+1. Builder: **Dockerfile**
 2. Root directory: repo root, not `legacy/`
-3. Same Postgres as the live shop (`DATABASE_URL`)
+3. **Custom start command:** clear it, or set `node scripts/start-railway.mjs`  
+   If it still says `gunicorn ...`, this repo now ships a `gunicorn` shim that starts the new app so the old command does not crash the deploy.
+4. Same Postgres as the live shop (`DATABASE_URL`)
 
 Variables to set:
 
@@ -20,9 +22,7 @@ Variables to set:
 | `GOOGLE_CLIENT_ID` | Google OAuth client id |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 
-Google Cloud console → APIs & Services → Credentials → OAuth client (Web):
+Google Cloud console → Credentials → OAuth client (Web):
 
 - Authorized JavaScript origin: `https://your-app.up.railway.app`
 - Authorized redirect URI: `https://your-app.up.railway.app/api/auth/callback/google`
-
-People can then create an account or sign in with Google, or with email and password.

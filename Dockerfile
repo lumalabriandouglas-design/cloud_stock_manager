@@ -5,6 +5,9 @@ COPY package.json package-lock.json ./
 RUN npm install --include=dev
 
 COPY . .
+RUN chmod +x scripts/gunicorn scripts/start-railway.mjs \
+  && ln -sf /app/scripts/gunicorn /usr/local/bin/gunicorn
+
 ENV VITE_AUTH_ENABLED=true
 ENV NPM_CONFIG_PRODUCTION=false
 ENV NPM_CONFIG_ENGINE_STRICT=false
