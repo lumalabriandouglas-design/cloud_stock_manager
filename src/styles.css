@@ -1,0 +1,73 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Source+Sans+3:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f3eee4;
+  --color-surface: #fffdf8;
+  --color-ink: #1c1914;
+  --color-muted: #6d675c;
+  --color-line: #ddd4c4;
+  --color-primary: #215c45;
+  --color-primary-fg: #f6f3ea;
+  --color-accent: #b4532a;
+  --color-warn: #8a5a12;
+  --color-warn-bg: #f4e6c8;
+  --color-danger: #9b2c2c;
+  --color-danger-bg: #f6dede;
+  --color-good: #215c45;
+  --color-good-bg: #dceadf;
+  --font-serif: "Fraunces", "Times New Roman", serif;
+  --font-sans: "Source Sans 3", "Segoe UI", sans-serif;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --shadow-card:
+    0 0 0 1px rgba(28, 25, 20, 0.06),
+    0 1px 2px -1px rgba(28, 25, 20, 0.06),
+    0 8px 20px -12px rgba(28, 25, 20, 0.12);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
