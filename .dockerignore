@@ -1,0 +1,7 @@
+.git
+.grok
+.output
+node_modules
+legacy
+screenshots
+*.log

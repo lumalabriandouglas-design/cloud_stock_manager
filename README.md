@@ -1,22 +1,28 @@
 # Cloud Stock Manager
 
-New shop app (Inventory + Sell). The previous Django project is kept in `legacy/`.
+Shop ledger (inventory + sales). The previous Django project is in `legacy/`.
 
 ## Railway
 
-Use the **same Postgres** the live shop already uses.
+In the service settings:
 
-This repo is set to Nixpacks + Node 22:
+1. Builder: **Dockerfile** (this repo includes one on Node 22 — the old Node 20 image cannot build Vite 8)
+2. Root directory: repo root, not `legacy/`
+3. Same Postgres as the live shop (`DATABASE_URL`)
 
-- Install: `npm install --include=dev`
-- Build: `npm run build`
-- Start: `node scripts/start-railway.mjs` on `$PORT`
-- Health check: `/healthz`
+Variables to set:
 
-Optional variables:
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Existing Railway Postgres |
+| `BETTER_AUTH_SECRET` | Long random string |
+| `BETTER_AUTH_URL` | Public https URL, e.g. `https://your-app.up.railway.app` |
+| `GOOGLE_CLIENT_ID` | Google OAuth client id |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 
-- `DATABASE_URL` — existing Railway Postgres
-- `BETTER_AUTH_URL` — public https URL (auto-filled from `RAILWAY_PUBLIC_DOMAIN` if unset)
-- `BETTER_AUTH_SECRET` — any long random string
+Google Cloud console → APIs & Services → Credentials → OAuth client (Web):
 
-Do not set the service root directory to `legacy/`.
+- Authorized JavaScript origin: `https://your-app.up.railway.app`
+- Authorized redirect URI: `https://your-app.up.railway.app/api/auth/callback/google`
+
+People can then create an account or sign in with Google, or with email and password.

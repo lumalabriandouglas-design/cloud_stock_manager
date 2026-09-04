@@ -152,6 +152,26 @@ export async function signIn(
   if (data?.url) window.location.href = data.url;
 }
 
+export async function signInWithGoogle(
+  opts: { callbackURL?: string; errorCallbackURL?: string } = {},
+): Promise<void> {
+  const callbackURL = opts.callbackURL ?? "/";
+  const errorCallbackURL = opts.errorCallbackURL ?? "/";
+  await runPreSignInSignOut({
+    livePreview: inLivePreview(),
+    hasBearer: Boolean(getBearerToken()),
+    requestSignOut: () => authClient.signOut(),
+    clearToken: () => setBearerToken(null),
+  });
+  const { data, error } = await authClient.signIn.social({
+    provider: "google",
+    callbackURL,
+    errorCallbackURL,
+  });
+  if (error) throw new Error(error.message ?? "Google sign-in failed");
+  if (data?.url) window.location.href = data.url;
+}
+
 /**
  * Open `/auth/popup` in a new window. Must run synchronously inside the click
  * handler (no await before this). The path is served by the template Vite
