@@ -170,10 +170,8 @@ export default defineConfig(({ command, isPreview }) => ({
     ...(command === "build" || isPreview
       ? [
           nitro({
-            preset:
-              process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID
-                ? "node-server"
-                : "vercel",
+            // This GitHub repo deploys on Railway. Always emit a Node server.
+            preset: "node-server",
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
