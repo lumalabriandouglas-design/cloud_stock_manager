@@ -5,8 +5,8 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "node scripts/start-railway.mjs",
-    "healthcheckPath": "/healthz",
+    "startCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn core.wsgi --bind 0.0.0.0:${PORT:-8080} --log-file -",
+    "healthcheckPath": "/",
     "healthcheckTimeout": 300,
     "restartPolicyType": "ON_FAILURE"
   }

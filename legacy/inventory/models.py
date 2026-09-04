@@ -225,3 +225,29 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"{self.message} ({self.created_at})"
+
+
+class StaffInvite(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="invites")
+    email = models.EmailField()
+    role = models.CharField(max_length=20, choices=UserProfile.ROLE_CHOICES, default=UserProfile.ROLE_STAFF)
+    can_manage_stock = models.BooleanField(default=True)
+    can_edit_items = models.BooleanField(default=True)
+    can_view_reports = models.BooleanField(default=True)
+    can_manage_categories = models.BooleanField(default=False)
+    can_manage_team = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("company", "email")
+
+    def __str__(self):
+        return f"{self.email} → {self.company.name}"
+
+
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="reset_codes")
+    code_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)

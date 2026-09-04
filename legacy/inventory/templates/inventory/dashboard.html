@@ -22,6 +22,7 @@
             </div>
         </div>
         <nav class="hidden md:flex items-center gap-1">
+            {% if can_view_reports %}<a href="{% url 'today' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Today</a>{% endif %}
             {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Reports</a>{% endif %}
             {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Categories</a>{% endif %}
             {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition">Team</a>{% endif %}

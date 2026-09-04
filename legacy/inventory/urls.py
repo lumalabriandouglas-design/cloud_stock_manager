@@ -1,10 +1,17 @@
 from django.urls import path
 from . import views
+from . import features
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("register/", views.register, name="register"),
     path("setup/", views.setup_company, name="setup_company"),
+    path("today/", features.today, name="today"),
+
+    path("accounts/google/", features.google_start, name="google_start"),
+    path("accounts/google/callback/", features.google_callback, name="google_callback"),
+    path("accounts/password-reset/", features.password_reset_request, name="password_reset_request"),
+    path("accounts/password-reset/confirm/", features.password_reset_confirm, name="password_reset_confirm"),
 
     path("platform/", views.platform_admin, name="platform_admin"),
     path("platform/create-business/", views.platform_create_business, name="platform_create_business"),
@@ -15,6 +22,8 @@ urlpatterns = [
     path("team/", views.manage_team, name="manage_team"),
     path("categories/", views.manage_categories, name="manage_categories"),
     path("items/<int:item_id>/edit/", views.edit_item, name="edit_item"),
+    path("items/<int:item_id>/delete/", features.delete_item, name="delete_item"),
+    path("shop/rename/", features.rename_shop, name="rename_shop"),
     path("reports/sales/", views.sales_report, name="sales_report"),
 
     path("billing/", views.billing, name="billing"),

@@ -26,7 +26,7 @@
             <form method="post" action="{% url 'login' %}" class="space-y-4">
                 {% csrf_token %}
                 <div>
-                    <label class="block text-xs font-medium text-slate-500 mb-1">Username</label>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Username or email</label>
                     <input type="text" name="username" required autofocus
                         class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
                 </div>
@@ -35,10 +35,16 @@
                     <input type="password" name="password" required
                         class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40 bg-slate-50/50">
                 </div>
+                <div class="flex justify-end">
+                    <a href="{% url 'password_reset_request' %}" class="text-xs text-emerald-600 font-medium">Forgot password?</a>
+                </div>
                 <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition">
                     Sign in
                 </button>
             </form>
+            <a href="{% url 'google_start' %}" class="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-800 hover:bg-slate-50">
+                Continue with Google
+            </a>
         </div>
 
         <p class="text-center text-sm text-slate-500 mt-6">

@@ -39,7 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
-    "inventory",
+    "inventory.apps.InventoryConfig",
 ]
 
 MIDDLEWARE = [
@@ -106,6 +106,11 @@ MEDIA_ROOT = BASE_DIR / "media"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
+
+AUTHENTICATION_BACKENDS = [
+    "inventory.backends.EmailOrUsernameBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

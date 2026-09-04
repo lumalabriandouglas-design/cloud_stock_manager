@@ -25,6 +25,7 @@ from .models import (
     Company,
     Item,
     Sale,
+    StaffInvite,
     StockIn,
     Subscription,
     UserProfile,
@@ -132,8 +133,10 @@ def register(request):
         password = request.POST.get("password", "")
         password2 = request.POST.get("password2", "")
         email = request.POST.get("email", "").strip()
+        from .features import apply_invite
+        pending_invite = StaffInvite.objects.filter(email__iexact=email).first() if email else None
         errors = []
-        if not company_name:
+        if not pending_invite and not company_name:
             errors.append("Business name is required.")
         if not username:
             errors.append("Username is required.")
@@ -141,7 +144,7 @@ def register(request):
             errors.append("Password must be at least 6 characters.")
         if password != password2:
             errors.append("Passwords do not match.")
-        if Company.objects.filter(name__iexact=company_name).exists():
+        if not pending_invite and company_name and Company.objects.filter(name__iexact=company_name).exists():
             errors.append("A business with that name already exists.")
         if User.objects.filter(username__iexact=username).exists():
             errors.append("That username is already taken.")
@@ -149,9 +152,14 @@ def register(request):
             for e in errors:
                 messages.error(request, e)
             return render(request, "inventory/register.html")
+        user = User.objects.create_user(username=username, email=email or "", password=password)
+        if pending_invite:
+            apply_invite(user)
+            login(request, user)
+            messages.success(request, f"Welcome to {user.profile.company.name}.")
+            return redirect("dashboard")
         company = Company.objects.create(name=company_name)
         Subscription.start_trial(company)
-        user = User.objects.create_user(username=username, email=email or "", password=password)
         UserProfile.objects.create(
             user=user, company=company, role=UserProfile.ROLE_OWNER,
             can_manage_stock=True, can_edit_items=True, can_view_reports=True,
@@ -457,13 +465,29 @@ def manage_team(request):
         if action == "add":
             username = request.POST.get("username", "").strip()
             password = request.POST.get("password", "")
+            email = request.POST.get("email", "").strip().lower()
             role = request.POST.get("role", UserProfile.ROLE_STAFF)
-            if not username or len(password) < 6:
-                messages.error(request, "Username and password (min 6 chars) required.")
+            if email and not username:
+                if StaffInvite.objects.filter(company=company, email=email).exists():
+                    messages.error(request, "That email already has an invite.")
+                else:
+                    StaffInvite.objects.create(
+                        company=company,
+                        email=email,
+                        role=role,
+                        can_manage_stock=request.POST.get("can_manage_stock") == "on" or role == UserProfile.ROLE_OWNER,
+                        can_edit_items=request.POST.get("can_edit_items") == "on" or role == UserProfile.ROLE_OWNER,
+                        can_view_reports=request.POST.get("can_view_reports") == "on" or role == UserProfile.ROLE_OWNER,
+                        can_manage_categories=request.POST.get("can_manage_categories") == "on" or role == UserProfile.ROLE_OWNER,
+                        can_manage_team=request.POST.get("can_manage_team") == "on" or role == UserProfile.ROLE_OWNER,
+                    )
+                    messages.success(request, f"Invite saved for {email}. They join when they sign in or register with that email.")
+            elif not username or len(password) < 6:
+                messages.error(request, "Username and password (min 6 chars) required — or invite by email only.")
             elif User.objects.filter(username__iexact=username).exists():
                 messages.error(request, "Username already taken.")
             else:
-                user = User.objects.create_user(username=username, password=password)
+                user = User.objects.create_user(username=username, email=email, password=password)
                 UserProfile.objects.create(
                     user=user, company=company, role=role,
                     can_manage_stock=request.POST.get("can_manage_stock") == "on" or role == UserProfile.ROLE_OWNER,
@@ -473,6 +497,9 @@ def manage_team(request):
                     can_manage_team=request.POST.get("can_manage_team") == "on" or role == UserProfile.ROLE_OWNER,
                 )
                 messages.success(request, f"Added {username}.")
+        elif action == "cancel_invite":
+            StaffInvite.objects.filter(id=request.POST.get("invite_id"), company=company).delete()
+            messages.success(request, "Invite cancelled.")
         elif action == "update_perms":
             member = get_object_or_404(UserProfile, id=request.POST.get("profile_id"), company=company)
             if member.is_owner:
@@ -496,7 +523,8 @@ def manage_team(request):
                 member.user.delete()
                 messages.success(request, f"Removed {uname}.")
         return redirect("manage_team")
-    return render(request, "inventory/manage_team.html", {"company": company, "members": members, "profile": profile, **perm_context(profile)})
+    invites = StaffInvite.objects.filter(company=company).order_by("-created_at")
+    return render(request, "inventory/manage_team.html", {"company": company, "members": members, "invites": invites, "profile": profile, **perm_context(profile)})
 
 
 @login_required
