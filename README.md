@@ -4,15 +4,19 @@ New shop app (Inventory + Sell). The previous Django project is kept in `legacy/
 
 ## Railway
 
-This service must stay on the **same Postgres** the live shop already uses.
+Use the **same Postgres** the live shop already uses.
 
-Railway reads `railway.json` + `nixpacks.toml`:
+This repo is set to Nixpacks + Node 22:
 
-- Builder: Nixpacks, **Node 22 only** (Vite 8 will not install on Railway’s Node 20.18)
-- Install: `npm ci --include=dev` so Vite/Nitro are present during the image build
+- Install: `npm install --include=dev`
 - Build: `npm run build`
-- Start: `node scripts/start-railway.mjs` (listens on `$PORT`)
+- Start: `node scripts/start-railway.mjs` on `$PORT`
+- Health check: `/healthz`
 
-Do not point the service at `legacy/`. That folder is the old Django app and is not part of this build.
+Optional variables:
 
-Existing usernames, emails, passwords, shops, and stock are imported on first boot. Old Django tables are not deleted.
+- `DATABASE_URL` — existing Railway Postgres
+- `BETTER_AUTH_URL` — public https URL (auto-filled from `RAILWAY_PUBLIC_DOMAIN` if unset)
+- `BETTER_AUTH_SECRET` — any long random string
+
+Do not set the service root directory to `legacy/`.

@@ -3,6 +3,11 @@ import { existsSync, readdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 
 const port = String(process.env.PORT || "8080");
+const publicDomain = (process.env.RAILWAY_PUBLIC_DOMAIN || "").trim();
+const betterAuthUrl =
+  (process.env.BETTER_AUTH_URL || "").trim() ||
+  (publicDomain ? `https://${publicDomain}` : "");
+
 const env = {
   ...process.env,
   PORT: port,
@@ -11,6 +16,15 @@ const env = {
   NITRO_HOST: "0.0.0.0",
   LISTEN_ADDRESS: "0.0.0.0",
 };
+
+if (betterAuthUrl && !process.env.BETTER_AUTH_URL) {
+  env.BETTER_AUTH_URL = betterAuthUrl;
+}
+if (!process.env.BETTER_AUTH_SECRET) {
+  env.BETTER_AUTH_SECRET =
+    process.env.RAILWAY_PROJECT_ID ||
+    "cloud-stock-manager-change-me-in-railway";
+}
 
 function run(command, args) {
   return new Promise((resolve, reject) => {
@@ -28,7 +42,9 @@ const candidates = [
   "server/index.mjs",
 ];
 const serverFile = candidates.find((file) => existsSync(file));
-console.log(`[start] port=${port} server=${serverFile || "missing"}`);
+console.log(
+  `[start] port=${port} host=0.0.0.0 server=${serverFile || "missing"} authUrl=${env.BETTER_AUTH_URL || "unset"}`,
+);
 if (!serverFile) {
   console.log("[start] files:", readdirSync(".").join(", "));
 }

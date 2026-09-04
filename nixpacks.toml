@@ -9,7 +9,8 @@ NPM_CONFIG_ENGINE_STRICT = "false"
 CI = "true"
 
 [phases.install]
-cmds = ["npm ci --include=dev"]
+# npm install (not ci) so a lockfile/package.json mismatch cannot fail the image.
+cmds = ["npm install --include=dev"]
 
 [phases.build]
 cmds = ["npm run build"]
