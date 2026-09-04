@@ -1,5 +1,7 @@
 [variables]
 NIXPACKS_NODE_VERSION = "20"
+NPM_CONFIG_ENGINE_STRICT = "false"
+NODE_ENV = "development"
 
-[phases.setup]
-nixPkgs = ["nodejs_20"]
+[phases.install]
+cmds = ["npm install"]
