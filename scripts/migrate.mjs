@@ -81,6 +81,11 @@ async function main() {
 }
 
 main().catch((err) => {
+  const code = err?.code;
+  if (code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "EAI_AGAIN") {
+    console.log("[migrate] database not reachable yet — will run on boot.");
+    process.exit(0);
+  }
   console.error("[migrate] failed:", err?.message || err);
   // pg errors carry the context needed to debug a bad SQL file.
   for (const key of ["code", "detail", "hint", "position", "where"]) {
