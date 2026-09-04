@@ -631,19 +631,19 @@ def record_sale(request):
         custom_price = request.POST.get("sell_price")
         if not item_id:
             messages.error(request, "Select an item.")
-            return redirect("dashboard")
+            return redirect("sell")
         item = get_object_or_404(Item, id=item_id, company=company)
         sell_price = custom_price if custom_price else item.sell_price
         if item.quantity_in_stock < quantity:
             messages.error(request, f"Only {item.quantity_in_stock} left of {item.name}.")
-            return redirect("dashboard")
+            return redirect("sell")
         Sale.objects.create(company=company, item=item, quantity_sold=quantity, sell_price=sell_price)
         item.quantity_in_stock -= quantity
         item.save()
         log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}x {item.name}")
         notify_low_stock(company, item)
         messages.success(request, f"Sold {quantity} x {item.name}.")
-    return redirect("dashboard")
+    return redirect("sell")
 
 
 @login_required

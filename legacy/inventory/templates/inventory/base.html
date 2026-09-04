@@ -63,15 +63,25 @@
         </a>
         <div class="flex shrink-0 items-center gap-1">
             <nav class="hidden items-center gap-1 md:flex">
-                <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'dashboard' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:text-ink{% endif %}">Inventory</a>
-                {% if can_view_reports %}<a href="{% url 'today' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'today' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:text-ink{% endif %}">Today</a>{% endif %}
-                {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'sales_report' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:text-ink{% endif %}">Reports</a>{% endif %}
-                {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Categories</a>{% endif %}
-                {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Team</a>{% endif %}
-                <a href="{% url 'billing' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Billing</a>
-                {% if is_platform_admin %}<a href="{% url 'platform_admin' %}" class="rounded-md px-3 py-2 text-sm text-accent">Platform</a>{% endif %}
+                <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'dashboard' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Inventory</a>
+                <a href="{% url 'sell' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'sell' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Sell</a>
             </nav>
-            <span class="hidden text-xs text-muted sm:inline">{{ request.user.username }}</span>
+            <div class="relative">
+                <button type="button" id="more-btn" aria-label="More" class="grid size-10 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <div id="more-menu" class="absolute right-0 z-50 mt-1 hidden w-56 rounded-md bg-surface py-1 shadow-card">
+                    {% if can_view_reports %}<a href="{% url 'today' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Today’s numbers</a>{% endif %}
+                    {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Sales report</a>{% endif %}
+                    {% if can_view_reports %}<a href="{% url 'export_inventory_csv' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Export stock</a>{% endif %}
+                    {% if can_view_reports %}<a href="{% url 'export_sales_csv' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Export sales</a>{% endif %}
+                    {% if can_manage_stock %}<a href="{% url 'import_inventory' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Import</a>{% endif %}
+                    {% if can_manage_categories %}<a href="{% url 'manage_categories' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Categories</a>{% endif %}
+                    {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Staff & access</a>{% endif %}
+                    <a href="{% url 'billing' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Billing</a>
+                    {% if request.user.is_superuser %}<a href="{% url 'platform_admin' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Platform admin</a>{% endif %}
+                </div>
+            </div>
             <form action="{% url 'logout' %}" method="post">{% csrf_token %}
                 <button class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Sign out</button>
             </form>
@@ -80,7 +90,7 @@
 </header>
 {% endif %}
 
-<main class="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
+<main class="mx-auto w-full max-w-5xl px-4 pb-24 pt-6 sm:px-6 sm:pb-10 sm:pt-8">
     {% if messages %}
     <div class="mb-6 space-y-2">{% for message in messages %}
         <div class="rounded-md px-4 py-3 text-sm {% if message.tags == 'success' %}bg-good-bg text-primary{% elif message.tags == 'error' %}bg-danger-bg text-danger{% else %}bg-warn-bg text-warn{% endif %}">{{ message }}</div>
@@ -90,15 +100,32 @@
 </main>
 
 {% if company %}
-<nav class="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg md:hidden">
-    <div class="flex h-14 items-center justify-around text-[11px]">
-        <a href="{% url 'dashboard' %}" class="font-medium text-primary">Stock</a>
-        {% if can_view_reports %}<a href="{% url 'today' %}" class="text-muted">Today</a>{% endif %}
-        {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="text-muted">Reports</a>{% endif %}
-        {% if can_manage_team %}<a href="{% url 'manage_team' %}" class="text-muted">Team</a>{% endif %}
-        <a href="{% url 'billing' %}" class="text-muted">Billing</a>
+<nav class="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface md:hidden">
+    <div class="grid grid-cols-2">
+        <a href="{% url 'dashboard' %}" class="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs {% if request.resolver_match.url_name == 'dashboard' %}text-primary{% else %}text-muted{% endif %}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
+            Inventory
+        </a>
+        <a href="{% url 'sell' %}" class="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs {% if request.resolver_match.url_name == 'sell' %}text-primary{% else %}text-muted{% endif %}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            Sell
+        </a>
     </div>
 </nav>
+<script>
+  (function () {
+    var btn = document.getElementById("more-btn");
+    var menu = document.getElementById("more-menu");
+    if (!btn || !menu) return;
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", function () {
+      menu.classList.add("hidden");
+    });
+  })();
+</script>
 {% endif %}
 </body>
 </html>

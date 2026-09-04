@@ -293,3 +293,29 @@ def rename_shop(request):
     profile.company.save()
     messages.success(request, "Shop name updated.")
     return redirect("dashboard")
+
+
+@login_required
+def sell(request):
+    profile = get_profile(request)
+    if profile is None:
+        return redirect("setup_company")
+    company = profile.company
+    now = timezone.localtime()
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    items = Item.objects.filter(company=company).order_by("name")
+    today_sales = Sale.objects.filter(company=company, sales_date__gte=start).select_related("item").order_by("-sales_date")
+    today_total = sum(s.line_total for s in today_sales)
+    return render(
+        request,
+        "inventory/sell.html",
+        {
+            "company": company,
+            "profile": profile,
+            "items": items,
+            "today_sales": today_sales,
+            "today_total": today_total,
+            "sub_active": company.is_subscription_active(),
+            **perm_context(profile),
+        },
+    )

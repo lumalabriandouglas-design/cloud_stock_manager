@@ -4,6 +4,7 @@ from . import features
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("sell/", features.sell, name="sell"),
     path("register/", views.register, name="register"),
     path("setup/", views.setup_company, name="setup_company"),
     path("today/", features.today, name="today"),
