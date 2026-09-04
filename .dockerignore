@@ -1,9 +1,0 @@
-node_modules
-.git
-.output
-.vercel
-legacy
-screenshots
-*.png
-.env
-.env.local
