@@ -51,17 +51,18 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body class="min-h-dvh bg-bg text-ink antialiased pb-16 md:pb-0">
-{% if company %}
+{% if request.user.is_authenticated %}
 <header class="sticky top-0 z-30 border-b border-line/80 bg-bg/90 backdrop-blur-md">
     <div class="mx-auto flex h-14 max-w-5xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
-        <a href="{% url 'dashboard' %}" class="flex min-w-0 items-center gap-3">
-            <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary font-serif text-sm font-semibold text-primary-fg">{{ company.name|slice:":1"|upper }}</div>
+        <a href="{% if company %}{% url 'dashboard' %}{% else %}{% url 'platform_admin' %}{% endif %}" class="flex min-w-0 items-center gap-3">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary font-serif text-sm font-semibold text-primary-fg">{% if company %}{{ company.name|slice:":1"|upper }}{% else %}P{% endif %}</div>
             <div class="min-w-0">
-                <p class="truncate font-serif text-base font-semibold leading-tight">{{ company.name }}</p>
-                <p class="text-xs leading-tight text-muted">Shop book</p>
+                <p class="truncate font-serif text-base font-semibold leading-tight">{% if company %}{{ company.name }}{% else %}Platform{% endif %}</p>
+                <p class="text-xs leading-tight text-muted">{% if company %}Shop book{% else %}Admin{% endif %}</p>
             </div>
         </a>
         <div class="flex shrink-0 items-center gap-1">
+            {% if company %}
             <nav class="hidden items-center gap-1 md:flex">
                 <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'dashboard' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Inventory</a>
                 <a href="{% url 'sell' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'sell' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Sell</a>
@@ -82,6 +83,9 @@
                     {% if request.user.is_superuser %}<a href="{% url 'platform_admin' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Platform admin</a>{% endif %}
                 </div>
             </div>
+            {% elif request.user.is_superuser %}
+            <a href="{% url 'platform_create_business' %}" class="hidden rounded-md px-3 py-2 text-sm text-muted hover:text-ink sm:inline">New business</a>
+            {% endif %}
             <form action="{% url 'logout' %}" method="post">{% csrf_token %}
                 <button class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">Sign out</button>
             </form>
