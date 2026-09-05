@@ -204,7 +204,7 @@ def dashboard(request):
         return redirect("setup_company")
     company = profile.company
     all_items = Item.objects.filter(company=company).select_related("category")
-    items = all_items.order_by("name")
+    items = all_items.order_by("category__name", "name")
     categories = Category.objects.filter(company=company).order_by("name")
     q = request.GET.get("q", "").strip()
     category_id = request.GET.get("category", "")

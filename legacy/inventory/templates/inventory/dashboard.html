@@ -130,24 +130,31 @@
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs text-muted">
                     <th class="px-5 py-3 font-medium">Product</th>
-                    <th class="hidden px-5 py-3 font-medium sm:table-cell">Category</th>
                     <th class="px-5 py-3 font-medium">Buy</th>
                     <th class="px-5 py-3 font-medium">Sell</th>
                     <th class="px-5 py-3 font-medium">Stock</th>
                     {% if can_edit_items %}<th class="px-5 py-3"></th>{% endif %}
                 </tr></thead>
-                <tbody class="divide-y divide-line">
-                    {% for item in items %}
-                    <tr>
-                        <td class="px-5 py-3 font-medium">{{ item.name }}</td>
-                        <td class="hidden px-5 py-3 text-muted sm:table-cell">{{ item.category.name|default:"—" }}</td>
-                        <td class="px-5 py-3 text-muted">{{ item.buy_price|intcomma }}</td>
-                        <td class="px-5 py-3 text-muted">{{ item.sell_price|intcomma }}</td>
-                        <td class="px-5 py-3">{% if item.quantity_in_stock == 0 %}<span class="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger">Out</span>{% elif item.quantity_in_stock <= item.reorder_level %}<span class="rounded-full bg-warn-bg px-2 py-0.5 text-xs font-medium text-warn">{{ item.quantity_in_stock }}</span>{% else %}{{ item.quantity_in_stock }}{% endif %}</td>
-                        {% if can_edit_items %}<td class="px-5 py-3"><a href="{% url 'edit_item' item.id %}" class="text-xs text-muted hover:text-primary">Edit</a></td>{% endif %}
+                <tbody>
+                    {% regroup items by category as item_groups %}
+                    {% for group in item_groups %}
+                    <tr class="bg-bg">
+                        <td colspan="{% if can_edit_items %}5{% else %}4{% endif %}" class="px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                            {{ group.grouper.name|default:"No category" }}
+                            <span class="ml-2 font-normal normal-case">{{ group.list|length }}</span>
+                        </td>
                     </tr>
+                    {% for item in group.list %}
+                    <tr class="border-t border-line/70">
+                        <td class="px-5 py-2.5 font-medium">{{ item.name }}</td>
+                        <td class="px-5 py-2.5 text-muted">{{ item.buy_price|intcomma }}</td>
+                        <td class="px-5 py-2.5 text-muted">{{ item.sell_price|intcomma }}</td>
+                        <td class="px-5 py-2.5">{% if item.quantity_in_stock == 0 %}<span class="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger">Out</span>{% elif item.quantity_in_stock <= item.reorder_level %}<span class="rounded-full bg-warn-bg px-2 py-0.5 text-xs font-medium text-warn">{{ item.quantity_in_stock }}</span>{% else %}{{ item.quantity_in_stock }}{% endif %}</td>
+                        {% if can_edit_items %}<td class="px-5 py-2.5 text-right"><a href="{% url 'edit_item' item.id %}" class="text-xs text-muted hover:text-primary">Edit</a></td>{% endif %}
+                    </tr>
+                    {% endfor %}
                     {% empty %}
-                    <tr><td colspan="6" class="px-5 py-12 text-center text-sm text-muted">{% if can_manage_stock %}Add stock above or <a href="{% url 'import_inventory' %}" class="text-primary">import a file</a>.{% else %}Ask an owner to add stock.{% endif %}</td></tr>
+                    <tr><td colspan="5" class="px-5 py-12 text-center text-sm text-muted">{% if can_manage_stock %}Add stock above or <a href="{% url 'import_inventory' %}" class="text-primary">import a file</a>.{% else %}Ask an owner to add stock.{% endif %}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
