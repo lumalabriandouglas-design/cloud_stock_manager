@@ -1,5 +1,5 @@
 {% extends "inventory/base.html" %}
-{% load humanize %}
+{% load shop %}
 {% block title %}Today – {{ company.name }}{% endblock %}
 {% block content %}
 <div>
@@ -8,13 +8,13 @@
 </div>
 <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
     <div class="card p-4"><p class="text-xs text-muted">Products</p><p class="mt-1 font-serif text-2xl font-semibold">{{ product_count }}</p></div>
-    <div class="card p-4"><p class="text-xs text-muted">Stock worth</p><p class="mt-1 font-serif text-xl font-semibold">UGX {{ inventory_value|intcomma }}</p></div>
-    <div class="card p-4"><p class="text-xs text-muted">Running low</p><p class="mt-1 font-serif text-2xl font-semibold {% if low_items %}text-danger{% endif %}">{{ low_items|length }}</p></div>
-    <div class="card p-4"><p class="text-xs text-muted">Sold today</p><p class="mt-1 font-serif text-xl font-semibold text-primary">UGX {{ today_total|intcomma }}</p></div>
+    <div class="card min-w-0 overflow-hidden p-4"><p class="text-xs text-muted">Stock worth</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight sm:text-xl">UGX {{ inventory_value|ugx }}</p></div>
+    <div class="card min-w-0 overflow-hidden p-4"><p class="text-xs text-muted">Running low</p><p class="mt-1 font-serif text-2xl font-semibold {% if low_items %}text-danger{% endif %}">{{ low_items|length }}</p></div>
+    <div class="card min-w-0 overflow-hidden p-4"><p class="text-xs text-muted">Sold today</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight text-primary sm:text-xl">UGX {{ today_total|ugx }}</p></div>
 </div>
 <div class="card mt-6 p-5">
     <p class="text-xs uppercase tracking-wide text-muted">Last 7 days</p>
-    <p class="mt-1 font-serif text-2xl font-semibold">UGX {{ week_total|intcomma }}</p>
+    <p class="mt-1 font-serif text-2xl font-semibold">UGX {{ week_total|ugx }}</p>
 </div>
 {% if low_items %}
 <div class="mt-6 rounded-lg bg-warn-bg p-5">
@@ -28,7 +28,7 @@
     <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Sales today</h2></div>
     {% if today_sales %}
     <ul class="divide-y divide-line">{% for s in today_sales %}
-        <li class="flex justify-between px-5 py-3 text-sm"><span>{{ s.qty_label }} {{ s.item.name }}</span><span>UGX {{ s.line_total|intcomma }}</span></li>
+        <li class="flex justify-between px-5 py-3 text-sm"><span>{{ s.qty_label }} {{ s.item.name }}</span><span>UGX {{ s.line_total|ugx }}</span></li>
     {% endfor %}</ul>
     {% else %}
     <p class="px-5 py-6 text-sm text-muted">No sales yet today.</p>

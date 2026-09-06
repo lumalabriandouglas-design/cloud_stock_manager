@@ -1,10 +1,10 @@
 {% extends "inventory/base.html" %}
-{% load humanize %}
+{% load shop %}
 {% block title %}Sell – {{ company.name }}{% endblock %}
 {% block content %}
 <div>
     <h1 class="text-3xl font-semibold tracking-tight">Sell</h1>
-    <p class="mt-1 text-sm text-muted">Today you have sold UGX {{ today_total|intcomma }}</p>
+    <p class="mt-1 text-sm text-muted">Today you have sold UGX {{ today_total|ugx }}</p>
 </div>
 <div class="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
     <section class="card p-5 sm:p-6">
@@ -38,7 +38,7 @@
         <ul class="divide-y divide-line">{% for s in today_sales %}
             <li class="flex justify-between px-5 py-3 text-sm">
                 <span>{{ s.qty_label }} {{ s.item.name }}</span>
-                <span>UGX {{ s.line_total|intcomma }}</span>
+                <span>UGX {{ s.line_total|ugx }}</span>
             </li>
         {% endfor %}</ul>
         {% else %}
