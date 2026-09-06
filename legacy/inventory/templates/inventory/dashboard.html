@@ -57,17 +57,15 @@
             <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Add stock</h2></div>
             <form action="{% url 'record_stock_in' %}" method="post" class="space-y-4 p-5">
                 {% csrf_token %}
-                <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Product</span>
-                    <select name="item_id" class="field">
-                        <option value="">New product…</option>
-                        {% for item in all_products %}
-                        <option value="{{ item.id }}">{{ item.name }} ({{ item.stock_label }})</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">New product name</span>
-                    <input name="item_name" placeholder="Only if you chose New product" class="field">
-                </label>
+                <div class="relative" id="stock-picker">
+                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Product</span>
+                        <input type="hidden" name="item_id" id="stock-item-id" value="">
+                        <input type="text" name="item_name" id="stock-item-name" autocomplete="off" placeholder="Tap to see all products, then type to search" class="field">
+                    </label>
+                    <div id="stock-item-list" class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-md bg-surface shadow-card"></div>
+                    <p id="stock-item-hint" class="mt-1 text-[11px] text-muted">Pick from the list, or type a new name.</p>
+                </div>
+                {{ stock_products|json_script:"stock-products" }}
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Sold as</span>
@@ -142,4 +140,64 @@
             </table>
         </div>
     </section>
+<script>
+(function () {
+  var dataEl = document.getElementById("stock-products");
+  var nameEl = document.getElementById("stock-item-name");
+  var idEl = document.getElementById("stock-item-id");
+  var listEl = document.getElementById("stock-item-list");
+  var hintEl = document.getElementById("stock-item-hint");
+  if (!dataEl || !nameEl || !idEl || !listEl) return;
+  var products = [];
+  try { products = JSON.parse(dataEl.textContent); } catch (e) { products = []; }
+
+  function render(query) {
+    var q = (query || "").trim().toLowerCase();
+    var matches = products.filter(function (p) {
+      return !q || p.name.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 80);
+    listEl.innerHTML = "";
+    if (!matches.length) {
+      var empty = document.createElement("div");
+      empty.className = "px-3 py-2.5 text-sm text-muted";
+      empty.textContent = q ? "No match. This will be a new product." : "No products yet.";
+      listEl.appendChild(empty);
+      idEl.value = "";
+      if (hintEl) hintEl.textContent = q ? "New product: " + nameEl.value : "Pick from the list, or type a new name.";
+    } else {
+      matches.forEach(function (p) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-bg";
+        var left = document.createElement("span");
+        left.textContent = p.name;
+        var right = document.createElement("span");
+        right.className = "shrink-0 text-xs text-muted";
+        right.textContent = p.stock;
+        btn.appendChild(left);
+        btn.appendChild(right);
+        btn.addEventListener("click", function () {
+          nameEl.value = p.name;
+          idEl.value = String(p.id);
+          listEl.classList.add("hidden");
+          if (hintEl) hintEl.textContent = "Selected: " + p.name;
+        });
+        listEl.appendChild(btn);
+      });
+    }
+    listEl.classList.remove("hidden");
+  }
+
+  nameEl.addEventListener("focus", function () { render(nameEl.value); });
+  nameEl.addEventListener("input", function () {
+    idEl.value = "";
+    render(nameEl.value);
+  });
+  document.addEventListener("click", function (e) {
+    if (!document.getElementById("stock-picker").contains(e.target)) {
+      listEl.classList.add("hidden");
+    }
+  });
+})();
+</script>
 {% endblock %}

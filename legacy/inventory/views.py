@@ -230,6 +230,10 @@ def dashboard(request):
     return render(request, "inventory/dashboard.html", {
         "company": company, "items": items, "categories": categories,
         "all_products": all_items.order_by("name"),
+        "stock_products": [
+            {"id": i.id, "name": i.name, "stock": i.stock_label, "unit": i.unit}
+            for i in all_items.order_by("name")
+        ],
         "recent_activity": recent_activity, "low_stock_items": low_stock_items,
         "low_stock_count": low_stock_count, "total_inventory_val": total_inventory_val,
         "today_sales_total": today_sales_total, "profile": profile,
