@@ -110,8 +110,8 @@
             <table class="w-full text-sm">
                 <thead><tr class="border-b border-line text-left text-xs text-muted">
                     <th class="px-3 py-3 font-medium sm:px-5">Product</th>
-                    <th class="hidden px-3 py-3 font-medium sm:table-cell sm:px-5">Buy</th>
-                    <th class="px-3 py-3 font-medium sm:px-5">Sell</th>
+                    <th class="px-3 py-3 font-medium sm:px-5">Buy</th>
+                    <th class="hidden px-3 py-3 font-medium sm:table-cell sm:px-5">Default sell</th>
                     <th class="px-3 py-3 font-medium sm:px-5">Stock</th>
                     {% if can_edit_items %}<th class="px-3 py-3 sm:px-5"></th>{% endif %}
                 </tr></thead>
@@ -127,8 +127,8 @@
                     {% for item in group.list %}
                     <tr class="border-t border-line/70">
                         <td class="max-w-[9rem] truncate px-3 py-2.5 font-medium sm:max-w-none sm:px-5">{{ item.name }}</td>
-                        <td class="hidden px-3 py-2.5 text-muted sm:table-cell sm:px-5">{{ item.buy_price|ugx }}</td>
-                        <td class="whitespace-nowrap px-3 py-2.5 text-muted sm:px-5">{{ item.sell_price|ugx }}</td>
+                        <td class="whitespace-nowrap px-3 py-2.5 text-muted sm:px-5">{{ item.buy_price|ugx }}</td>
+                        <td class="hidden whitespace-nowrap px-3 py-2.5 text-muted sm:table-cell sm:px-5">{{ item.sell_price|ugx }}</td>
                         <td class="whitespace-nowrap px-3 py-2.5 sm:px-5">{% if item.quantity_in_stock == 0 %}<span class="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger">Out</span>{% elif item.quantity_in_stock <= item.reorder_level %}<span class="rounded-full bg-warn-bg px-2 py-0.5 text-xs font-medium text-warn">{{ item.stock_label }}</span>{% else %}{{ item.stock_label }}{% endif %}</td>
                         {% if can_edit_items %}<td class="px-3 py-2.5 text-right sm:px-5"><a href="{% url 'edit_item' item.id %}" class="text-xs text-muted hover:text-primary">Edit</a></td>{% endif %}
                     </tr>
