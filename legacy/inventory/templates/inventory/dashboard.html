@@ -52,7 +52,7 @@
     {% endif %}
 
     {% if can_manage_stock %}
-    <div class="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 sm:gap-6">
+    <div class="mt-6 max-w-xl">
         <section class="card overflow-hidden">
             <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Add stock</h2></div>
             <form action="{% url 'record_stock_in' %}" method="post" class="space-y-4 p-5">
@@ -78,38 +78,7 @@
                 <button type="submit" class="btn-primary w-full" {% if not sub_active %}disabled{% endif %}>Add stock</button>
             </form>
         </section>
-        <section class="card flex flex-col overflow-hidden">
-            <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Record sale</h2></div>
-            <form action="{% url 'record_sale' %}" method="post" class="flex-1 space-y-4 p-5">
-                {% csrf_token %}
-                <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Item</span>
-                    <select name="item_id" required class="field"><option value="">Choose…</option>{% for item in items %}<option value="{{ item.id }}">{{ item.name }} ({{ item.stock_label }})</option>{% endfor %}</select>
-                </label>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>
-                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Price</span><input type="number" step="0.01" name="sell_price" placeholder="Default" class="field"></label>
-                </div>
-                <button type="submit" class="btn-primary w-full" {% if not sub_active %}disabled{% endif %}>Complete sale</button>
-            </form>
-            <div class="border-t border-line px-5 py-3">
-                <p class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">Recent</p>
-                {% for a in recent_activity %}<div class="flex justify-between gap-2 text-xs"><span class="truncate">{{ a.message }}</span><span class="shrink-0 text-muted">{{ a.created_at|timesince }} ago</span></div>
-                {% empty %}<p class="text-xs text-muted">No activity yet</p>{% endfor %}
-            </div>
-        </section>
     </div>
-
-    <section class="card mt-6 flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
-        <div class="flex-1">
-            <h2 class="text-lg font-semibold">Scan a ledger</h2>
-            <p class="text-sm text-muted">Photo of a handwritten stock book</p>
-        </div>
-        <form action="{% url 'scan_ledger' %}" method="post" enctype="multipart/form-data" class="flex flex-wrap items-center gap-3">
-            {% csrf_token %}
-            <input type="file" name="ledger_photo" accept="image/*" required class="text-xs text-muted">
-            <button type="submit" class="btn-primary h-10 px-4 text-xs" {% if not sub_active %}disabled{% endif %}>Scan</button>
-        </form>
-    </section>
     {% endif %}
 
     <section class="card mt-6 overflow-hidden">
