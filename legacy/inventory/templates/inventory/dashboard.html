@@ -58,8 +58,15 @@
             <form action="{% url 'record_stock_in' %}" method="post" class="space-y-4 p-5">
                 {% csrf_token %}
                 <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Product</span>
-                    <input list="items_list" name="item_name" required placeholder="Name or pick existing" class="field">
-                    <datalist id="items_list">{% for item in items %}<option value="{{ item.name }}">{% endfor %}</datalist>
+                    <select name="item_id" class="field">
+                        <option value="">New product…</option>
+                        {% for item in all_products %}
+                        <option value="{{ item.id }}">{{ item.name }} ({{ item.stock_label }})</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">New product name</span>
+                    <input name="item_name" placeholder="Only if you chose New product" class="field">
                 </label>
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>

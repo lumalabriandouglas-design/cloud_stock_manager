@@ -229,6 +229,7 @@ def dashboard(request):
     sub_active = company.is_subscription_active()
     return render(request, "inventory/dashboard.html", {
         "company": company, "items": items, "categories": categories,
+        "all_products": all_items.order_by("name"),
         "recent_activity": recent_activity, "low_stock_items": low_stock_items,
         "low_stock_count": low_stock_count, "total_inventory_val": total_inventory_val,
         "today_sales_total": today_sales_total, "profile": profile,
@@ -667,6 +668,7 @@ def record_sale(request):
 def record_stock_in(request):
     if request.method == "POST":
         company = get_user_company(request)
+        item_id = request.POST.get("item_id")
         item_name = request.POST.get("item_name", "").strip()
         category_id = request.POST.get("category_id")
         unit = request.POST.get("unit", Item.UNIT_PCS)
@@ -674,15 +676,19 @@ def record_stock_in(request):
             unit = Item.UNIT_PCS
         buy_price = request.POST.get("buy_price") or 0
         sell_price = request.POST.get("sell_price") or 0
-        if not item_name:
-            messages.error(request, "Name and positive quantity required.")
-            return redirect("dashboard")
-        normalized = " ".join(item_name.split()).title()
-        category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
-        item, created = Item.objects.get_or_create(
-            company=company, name=normalized,
-            defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0, "unit": unit},
-        )
+        existing = Item.objects.filter(id=item_id, company=company).first() if item_id else None
+        if existing:
+            item, created = existing, False
+        else:
+            if not item_name:
+                messages.error(request, "Pick a product or type a new name.")
+                return redirect("dashboard")
+            normalized = " ".join(item_name.split()).title()
+            category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
+            item, created = Item.objects.get_or_create(
+                company=company, name=normalized,
+                defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0, "unit": unit},
+            )
         quantity = parse_qty(request.POST.get("quantity", "0"), item.unit)
         if not quantity:
             messages.error(request, "Enter a valid quantity. Use whole numbers for pieces, or kg like 0.5.")
