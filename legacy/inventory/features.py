@@ -56,16 +56,29 @@ def apply_invite(user: User) -> bool:
     return True
 
 
+def _clean_env(name: str) -> str:
+    value = os.getenv(name, "") or ""
+    return value.replace("\n", "").replace("\r", "").replace(" ", "").strip().strip('"').strip("'")
+
+
 def google_enabled() -> bool:
-    return bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"))
+    return bool(_clean_env("GOOGLE_CLIENT_ID") and _clean_env("GOOGLE_CLIENT_SECRET"))
+
+
+def _google_client_id() -> str:
+    return _clean_env("GOOGLE_CLIENT_ID")
+
+
+def _google_client_secret() -> str:
+    return _clean_env("GOOGLE_CLIENT_SECRET")
 
 
 def _google_redirect_uri(request) -> str:
-    public = (os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").rstrip("/")
+    public = _clean_env("PUBLIC_URL") or _clean_env("RAILWAY_PUBLIC_DOMAIN")
     if public:
         if not public.startswith("http"):
             public = f"https://{public}"
-        return f"{public}/accounts/google/callback/"
+        return f"{public.rstrip('/')}/accounts/google/callback/"
     uri = request.build_absolute_uri("/accounts/google/callback/")
     if uri.startswith("http://"):
         uri = "https://" + uri[len("http://") :]
@@ -73,10 +86,17 @@ def _google_redirect_uri(request) -> str:
 
 
 def google_start(request):
-    if not google_enabled():
+    client_id = _google_client_id()
+    if not client_id or not _google_client_secret():
         messages.error(
             request,
             "Google sign-in is not on yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on Railway.",
+        )
+        return redirect("login")
+    if not client_id.endswith(".apps.googleusercontent.com"):
+        messages.error(
+            request,
+            "GOOGLE_CLIENT_ID on Railway is not a full Web client ID. It must end with .apps.googleusercontent.com on one line.",
         )
         return redirect("login")
     redirect_uri = _google_redirect_uri(request)
@@ -85,7 +105,7 @@ def google_start(request):
     request.session["google_oauth_next"] = request.GET.get("next", "")
     params = urllib.parse.urlencode(
         {
-            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "client_id": client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": "openid email profile",
@@ -110,8 +130,8 @@ def google_callback(request):
     token_body = urllib.parse.urlencode(
         {
             "code": code,
-            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
-            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
+            "client_id": _google_client_id(),
+            "client_secret": _google_client_secret(),
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         }
