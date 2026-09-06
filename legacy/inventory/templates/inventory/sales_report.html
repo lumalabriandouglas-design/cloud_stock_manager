@@ -30,7 +30,7 @@
                 <tr>
                     <td class="px-5 py-3 text-xs text-muted">{{ s.sales_date|date:"d M Y H:i" }}</td>
                     <td class="px-5 py-3 font-medium">{{ s.item.name }}</td>
-                    <td class="px-5 py-3">{{ s.quantity_sold }}</td>
+                    <td class="px-5 py-3">{{ s.qty_label }}</td>
                     <td class="hidden px-5 py-3 text-muted sm:table-cell">{{ s.sell_price|intcomma }}</td>
                     <td class="px-5 py-3">{{ s.line_total|intcomma }}</td>
                 </tr>

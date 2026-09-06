@@ -29,6 +29,7 @@ from .models import (
     StockIn,
     Subscription,
     UserProfile,
+    parse_qty,
 )
 
 
@@ -389,17 +390,20 @@ def import_inventory(request):
             normalized = " ".join(str(product).split()).title()
             buy = _to_decimal(_row_get(row, "buy_price", "buy", "cost", "cost_price"))
             sell = _to_decimal(_row_get(row, "sell_price", "sell", "price", "selling_price"))
-            qty = _to_int(_row_get(row, "quantity", "qty", "stock", "quantity_in_stock"), 0)
-            reorder = _to_int(_row_get(row, "reorder_level", "reorder", "min_stock"), 5)
             cat_name = _row_get(row, "category", "cat")
+            unit_raw = str(_row_get(row, "unit", "measure", "uom")).strip().lower()
+            unit = Item.UNIT_KG if unit_raw in ("kg", "kgs", "kilo", "kilos", "kilogram", "kilograms") else Item.UNIT_PCS
             category = None
             if cat_name:
                 category, _ = Category.objects.get_or_create(company=company, name=str(cat_name).strip().title())
+            qty = _to_decimal(_row_get(row, "quantity", "qty", "stock", "quantity_in_stock"), 0)
+            reorder = _to_decimal(_row_get(row, "reorder_level", "reorder", "min_stock"), 5)
             item, is_new = Item.objects.get_or_create(
                 company=company, name=normalized,
                 defaults={
                     "category": category, "buy_price": buy, "sell_price": sell,
-                    "quantity_in_stock": max(0, qty), "reorder_level": reorder if reorder > 0 else 5,
+                    "quantity_in_stock": max(Decimal("0"), qty), "reorder_level": reorder if reorder > 0 else 5,
+                    "unit": unit,
                 },
             )
             if is_new:
@@ -419,6 +423,8 @@ def import_inventory(request):
                     item.category = category
                 if reorder > 0:
                     item.reorder_level = reorder
+                if unit_raw:
+                    item.unit = unit
                 item.save()
         log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"Import: {created} new, {updated} updated")
         messages.success(request, f"Import done: {created} created, {updated} updated" + (f", {skipped} skipped." if skipped else "."))
@@ -433,9 +439,9 @@ def export_inventory_csv(request):
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="{company.name}_inventory.csv"'
     writer = csv.writer(response)
-    writer.writerow(["Name", "Category", "Buy Price", "Sell Price", "Quantity", "Reorder Level"])
+    writer.writerow(["Name", "Category", "Unit", "Buy Price", "Sell Price", "Quantity", "Reorder Level"])
     for item in Item.objects.filter(company=company).select_related("category").order_by("name"):
-        writer.writerow([item.name, item.category.name if item.category else "", item.buy_price, item.sell_price, item.quantity_in_stock, item.reorder_level])
+        writer.writerow([item.name, item.category.name if item.category else "", item.unit, item.buy_price, item.sell_price, item.quantity_in_stock, item.reorder_level])
     return response
 
 
@@ -573,9 +579,12 @@ def edit_item(request, item_id):
             return redirect("billing")
         name = request.POST.get("name", "").strip()
         category_id = request.POST.get("category_id")
+        unit = request.POST.get("unit", Item.UNIT_PCS)
+        if unit not in (Item.UNIT_PCS, Item.UNIT_KG):
+            unit = Item.UNIT_PCS
         buy_price = request.POST.get("buy_price") or 0
         sell_price = request.POST.get("sell_price") or 0
-        reorder_level = request.POST.get("reorder_level") or 5
+        reorder_raw = request.POST.get("reorder_level") or "5"
         qty_adjust = request.POST.get("qty_adjust")
         if not name:
             messages.error(request, "Name required.")
@@ -583,18 +592,21 @@ def edit_item(request, item_id):
             messages.error(request, "Name already used.")
         else:
             item.name = name
+            item.unit = unit
             item.category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
             item.buy_price = buy_price
             item.sell_price = sell_price
-            item.reorder_level = int(reorder_level)
+            reorder = parse_qty(reorder_raw, unit) or (Decimal("0.5") if unit == Item.UNIT_KG else Decimal("5"))
+            item.reorder_level = reorder
             if qty_adjust and profile.has_perm("can_manage_stock"):
-                try:
-                    delta = int(qty_adjust)
-                    item.quantity_in_stock = max(0, item.quantity_in_stock + delta)
-                    if delta > 0:
-                        StockIn.objects.create(company=company, item=item, quantity_added=delta)
-                except ValueError:
-                    pass
+                delta = parse_qty(qty_adjust.lstrip("+"), unit)
+                if qty_adjust.strip().startswith("-"):
+                    delta = parse_qty(qty_adjust.lstrip("-"), unit)
+                    if delta:
+                        item.quantity_in_stock = max(Decimal("0"), item.quantity_in_stock - delta)
+                elif delta:
+                    item.quantity_in_stock += delta
+                    StockIn.objects.create(company=company, item=item, quantity_added=delta)
             item.save()
             log_activity(company, request.user, ActivityLog.ACTION_ITEM_EDIT, f"Updated {item.name}")
             messages.success(request, f"'{item.name}' updated.")
@@ -627,22 +639,25 @@ def record_sale(request):
     if request.method == "POST":
         company = get_user_company(request)
         item_id = request.POST.get("item_id")
-        quantity = int(request.POST.get("quantity", 1))
         custom_price = request.POST.get("sell_price")
         if not item_id:
             messages.error(request, "Select an item.")
             return redirect("sell")
         item = get_object_or_404(Item, id=item_id, company=company)
+        quantity = parse_qty(request.POST.get("quantity", "1"), item.unit)
+        if not quantity:
+            messages.error(request, "Enter a valid quantity. Use whole numbers for pieces, or kg like 0.5.")
+            return redirect("sell")
         sell_price = custom_price if custom_price else item.sell_price
         if item.quantity_in_stock < quantity:
-            messages.error(request, f"Only {item.quantity_in_stock} left of {item.name}.")
+            messages.error(request, f"Only {item.stock_label} left of {item.name}.")
             return redirect("sell")
         Sale.objects.create(company=company, item=item, quantity_sold=quantity, sell_price=sell_price)
         item.quantity_in_stock -= quantity
         item.save()
-        log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {quantity}x {item.name}")
+        log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Sold {item.format_qty(quantity)} {item.name}")
         notify_low_stock(company, item)
-        messages.success(request, f"Sold {quantity} x {item.name}.")
+        messages.success(request, f"Sold {item.format_qty(quantity)} {item.name}.")
     return redirect("sell")
 
 
@@ -654,18 +669,24 @@ def record_stock_in(request):
         company = get_user_company(request)
         item_name = request.POST.get("item_name", "").strip()
         category_id = request.POST.get("category_id")
+        unit = request.POST.get("unit", Item.UNIT_PCS)
+        if unit not in (Item.UNIT_PCS, Item.UNIT_KG):
+            unit = Item.UNIT_PCS
         buy_price = request.POST.get("buy_price") or 0
         sell_price = request.POST.get("sell_price") or 0
-        quantity = int(request.POST.get("quantity", 0))
-        if not item_name or quantity <= 0:
+        if not item_name:
             messages.error(request, "Name and positive quantity required.")
             return redirect("dashboard")
         normalized = " ".join(item_name.split()).title()
         category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
         item, created = Item.objects.get_or_create(
             company=company, name=normalized,
-            defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0},
+            defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0, "unit": unit},
         )
+        quantity = parse_qty(request.POST.get("quantity", "0"), item.unit)
+        if not quantity:
+            messages.error(request, "Enter a valid quantity. Use whole numbers for pieces, or kg like 0.5.")
+            return redirect("dashboard")
         item.quantity_in_stock += quantity
         if buy_price:
             item.buy_price = buy_price
@@ -675,8 +696,8 @@ def record_stock_in(request):
             item.category = category
         item.save()
         StockIn.objects.create(company=company, item=item, quantity_added=quantity)
-        log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"+{quantity} {item.name}")
-        messages.success(request, f"{'Created' if created else 'Restocked'} {item.name}: +{quantity}")
+        log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"+{item.format_qty(quantity)} {item.name}")
+        messages.success(request, f"{'Created' if created else 'Restocked'} {item.name}: +{item.format_qty(quantity)}")
     return redirect("dashboard")
 
 

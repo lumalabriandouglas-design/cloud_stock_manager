@@ -43,7 +43,7 @@
             <li class="flex items-center justify-between text-sm">
                 <span class="font-medium">{{ item.name }}</span>
                 <span class="flex items-center gap-3">
-                    <span class="text-xs {% if item.quantity_in_stock == 0 %}text-danger{% else %}text-warn{% endif %}">{{ item.quantity_in_stock }} left</span>
+                    <span class="text-xs {% if item.quantity_in_stock == 0 %}text-danger{% else %}text-warn{% endif %}">{{ item.stock_label }} left</span>
                     {% if can_edit_items %}<a href="{% url 'edit_item' item.id %}" class="text-xs text-muted hover:text-primary">Edit</a>{% endif %}
                 </span>
             </li>{% endfor %}
@@ -61,8 +61,14 @@
                     <input list="items_list" name="item_name" required placeholder="Name or pick existing" class="field">
                     <datalist id="items_list">{% for item in items %}<option value="{{ item.name }}">{% endfor %}</datalist>
                 </label>
-                <div class="grid grid-cols-3 gap-3">
-                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="1" value="1" required class="field"></label>
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>
+                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Sold as</span>
+                        <select name="unit" class="field">
+                            <option value="pcs">Pieces</option>
+                            <option value="kg">Kilograms</option>
+                        </select>
+                    </label>
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Buy</span><input type="number" step="0.01" name="buy_price" class="field"></label>
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Sell</span><input type="number" step="0.01" name="sell_price" class="field"></label>
                 </div>
@@ -77,10 +83,10 @@
             <form action="{% url 'record_sale' %}" method="post" class="flex-1 space-y-4 p-5">
                 {% csrf_token %}
                 <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Item</span>
-                    <select name="item_id" required class="field"><option value="">Choose…</option>{% for item in items %}<option value="{{ item.id }}">{{ item.name }} ({{ item.quantity_in_stock }})</option>{% endfor %}</select>
+                    <select name="item_id" required class="field"><option value="">Choose…</option>{% for item in items %}<option value="{{ item.id }}">{{ item.name }} ({{ item.stock_label }})</option>{% endfor %}</select>
                 </label>
                 <div class="grid grid-cols-2 gap-3">
-                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="1" value="1" required class="field"></label>
+                    <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Price</span><input type="number" step="0.01" name="sell_price" placeholder="Default" class="field"></label>
                 </div>
                 <button type="submit" class="btn-primary w-full" {% if not sub_active %}disabled{% endif %}>Complete sale</button>
@@ -149,7 +155,7 @@
                         <td class="px-5 py-2.5 font-medium">{{ item.name }}</td>
                         <td class="px-5 py-2.5 text-muted">{{ item.buy_price|intcomma }}</td>
                         <td class="px-5 py-2.5 text-muted">{{ item.sell_price|intcomma }}</td>
-                        <td class="px-5 py-2.5">{% if item.quantity_in_stock == 0 %}<span class="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger">Out</span>{% elif item.quantity_in_stock <= item.reorder_level %}<span class="rounded-full bg-warn-bg px-2 py-0.5 text-xs font-medium text-warn">{{ item.quantity_in_stock }}</span>{% else %}{{ item.quantity_in_stock }}{% endif %}</td>
+                        <td class="px-5 py-2.5">{% if item.quantity_in_stock == 0 %}<span class="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger">Out</span>{% elif item.quantity_in_stock <= item.reorder_level %}<span class="rounded-full bg-warn-bg px-2 py-0.5 text-xs font-medium text-warn">{{ item.stock_label }}</span>{% else %}{{ item.stock_label }}{% endif %}</td>
                         {% if can_edit_items %}<td class="px-5 py-2.5 text-right"><a href="{% url 'edit_item' item.id %}" class="text-xs text-muted hover:text-primary">Edit</a></td>{% endif %}
                     </tr>
                     {% endfor %}

@@ -20,7 +20,7 @@
 <div class="mt-6 rounded-lg bg-warn-bg p-5">
     <h2 class="text-lg font-semibold text-warn">Running low</h2>
     <ul class="mt-3 space-y-1 text-sm">{% for it in low_items %}
-        <li class="flex justify-between"><span>{{ it.name }}</span><span>{{ it.quantity_in_stock }} left</span></li>
+        <li class="flex justify-between"><span>{{ it.name }}</span><span>{{ it.stock_label }} left</span></li>
     {% endfor %}</ul>
 </div>
 {% endif %}
@@ -28,7 +28,7 @@
     <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Sales today</h2></div>
     {% if today_sales %}
     <ul class="divide-y divide-line">{% for s in today_sales %}
-        <li class="flex justify-between px-5 py-3 text-sm"><span>{{ s.quantity_sold }} × {{ s.item.name }}</span><span>UGX {{ s.line_total|intcomma }}</span></li>
+        <li class="flex justify-between px-5 py-3 text-sm"><span>{{ s.qty_label }} {{ s.item.name }}</span><span>UGX {{ s.line_total|intcomma }}</span></li>
     {% endfor %}</ul>
     {% else %}
     <p class="px-5 py-6 text-sm text-muted">No sales yet today.</p>

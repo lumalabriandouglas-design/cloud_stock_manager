@@ -18,13 +18,13 @@
                 <select name="item_id" required class="field">
                     <option value="">Choose…</option>
                     {% for item in items %}
-                    <option value="{{ item.id }}">{{ item.name }} ({{ item.quantity_in_stock }})</option>
+                    <option value="{{ item.id }}">{{ item.name }} ({{ item.stock_label }})</option>
                     {% endfor %}
                 </select>
             </label>
             <div class="grid grid-cols-2 gap-3">
-                <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span>
-                    <input type="number" name="quantity" min="1" value="1" required class="field"></label>
+                <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty (pcs or kg)</span>
+                    <input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>
                 <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Price</span>
                     <input type="number" step="0.01" name="sell_price" placeholder="Default" class="field"></label>
             </div>
@@ -37,7 +37,7 @@
         {% if today_sales %}
         <ul class="divide-y divide-line">{% for s in today_sales %}
             <li class="flex justify-between px-5 py-3 text-sm">
-                <span>{{ s.quantity_sold }} × {{ s.item.name }}</span>
+                <span>{{ s.qty_label }} {{ s.item.name }}</span>
                 <span>UGX {{ s.line_total|intcomma }}</span>
             </li>
         {% endfor %}</ul>

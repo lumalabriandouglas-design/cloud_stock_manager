@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.contrib.auth.models import User
 from django.db import models
@@ -148,13 +149,21 @@ class Category(models.Model):
 
 
 class Item(models.Model):
+    UNIT_PCS = "pcs"
+    UNIT_KG = "kg"
+    UNIT_CHOICES = [
+        (UNIT_PCS, "Pieces"),
+        (UNIT_KG, "Kilograms"),
+    ]
+
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="items")
     name = models.CharField(max_length=255)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    unit = models.CharField(max_length=8, choices=UNIT_CHOICES, default=UNIT_PCS)
     buy_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     sell_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    quantity_in_stock = models.IntegerField(default=0)
-    reorder_level = models.IntegerField(default=5)
+    quantity_in_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    reorder_level = models.DecimalField(max_digits=12, decimal_places=3, default=5)
 
     class Meta:
         unique_together = ("company", "name")
@@ -171,16 +180,66 @@ class Item(models.Model):
     def is_low_stock(self):
         return self.quantity_in_stock <= self.reorder_level
 
+    @property
+    def is_kg(self):
+        return self.unit == self.UNIT_KG
+
+    def format_qty(self, qty=None):
+        value = self.quantity_in_stock if qty is None else qty
+        text = format_qty_number(value)
+        if self.is_kg:
+            return f"{text} kg"
+        return text
+
+    @property
+    def stock_label(self):
+        return self.format_qty()
+
+    @property
+    def price_hint(self):
+        return "per kg" if self.is_kg else "each"
+
+
+def format_qty_number(value):
+    try:
+        q = Decimal(value)
+    except (InvalidOperation, TypeError):
+        return "0"
+    q = q.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+    if q == q.to_integral_value():
+        return str(int(q))
+    return format(q.normalize(), "f")
+
+
+def parse_qty(raw, unit="pcs"):
+    try:
+        q = Decimal(str(raw).replace(",", "").strip())
+    except (InvalidOperation, AttributeError, TypeError):
+        return None
+    if q <= 0:
+        return None
+    if unit == Item.UNIT_KG:
+        return q.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+    if q != q.to_integral_value():
+        return None
+    return q.quantize(Decimal("1"))
+
 
 class Sale(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="sales")
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
-    quantity_sold = models.IntegerField(default=1)
+    quantity_sold = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     sell_price = models.DecimalField(max_digits=12, decimal_places=2)
     sales_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.quantity_sold}x {self.item.name} - {self.company.name}"
+
+    @property
+    def qty_label(self):
+        if self.item_id:
+            return self.item.format_qty(self.quantity_sold)
+        return format_qty_number(self.quantity_sold)
 
     @property
     def line_total(self):
@@ -198,7 +257,7 @@ class Sale(models.Model):
 class StockIn(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="stock_entries")
     item = models.ForeignKey(Item, on_delete=models.CASCADE)
-    quantity_added = models.IntegerField(default=0)
+    quantity_added = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     entry_date = models.DateTimeField(auto_now_add=True)
 
 
