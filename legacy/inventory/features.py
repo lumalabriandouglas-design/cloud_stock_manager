@@ -60,37 +60,58 @@ def google_enabled() -> bool:
     return bool(os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"))
 
 
+def _google_redirect_uri(request) -> str:
+    public = (os.getenv("PUBLIC_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").rstrip("/")
+    if public:
+        if not public.startswith("http"):
+            public = f"https://{public}"
+        return f"{public}/accounts/google/callback/"
+    uri = request.build_absolute_uri("/accounts/google/callback/")
+    if uri.startswith("http://"):
+        uri = "https://" + uri[len("http://") :]
+    return uri
+
+
 def google_start(request):
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "")
-    if not client_id:
-        messages.error(request, "Google sign-in is not configured yet.")
+    if not google_enabled():
+        messages.error(
+            request,
+            "Google sign-in is not on yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on Railway.",
+        )
         return redirect("login")
-    redirect_uri = request.build_absolute_uri("/accounts/google/callback/")
+    redirect_uri = _google_redirect_uri(request)
+    state = secrets.token_urlsafe(24)
+    request.session["google_oauth_state"] = state
+    request.session["google_oauth_next"] = request.GET.get("next", "")
     params = urllib.parse.urlencode(
         {
-            "client_id": client_id,
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
             "redirect_uri": redirect_uri,
             "response_type": "code",
             "scope": "openid email profile",
             "prompt": "select_account",
+            "state": state,
+            "access_type": "online",
         }
     )
     return redirect(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
 
 
 def google_callback(request):
+    if request.GET.get("state") != request.session.get("google_oauth_state"):
+        messages.error(request, "Google sign-in expired. Try again.")
+        return redirect("login")
+    request.session.pop("google_oauth_state", None)
     code = request.GET.get("code", "")
     if not code:
         messages.error(request, "Google sign-in was cancelled.")
         return redirect("login")
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    redirect_uri = request.build_absolute_uri("/accounts/google/callback/")
+    redirect_uri = _google_redirect_uri(request)
     token_body = urllib.parse.urlencode(
         {
             "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
+            "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET", ""),
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
         }
@@ -117,7 +138,7 @@ def google_callback(request):
         ) as resp:
             info = json.loads(resp.read().decode())
     except Exception:
-        messages.error(request, "Google sign-in failed. Try email and password.")
+        messages.error(request, "Google sign-in failed. Check the callback URL and try email instead.")
         return redirect("login")
 
     email = (info.get("email") or "").strip().lower()
@@ -127,7 +148,7 @@ def google_callback(request):
     name = (info.get("name") or email.split("@")[0]).strip()
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
-        base = email.split("@")[0][:20]
+        base = "".join(ch for ch in email.split("@")[0] if ch.isalnum() or ch in "._-")[:20] or "shop"
         username = base
         n = 1
         while User.objects.filter(username__iexact=username).exists():
@@ -137,11 +158,11 @@ def google_callback(request):
         user.set_unusable_password()
         user.save()
     apply_invite(user)
-    login(request, user)
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     if hasattr(user, "profile"):
         messages.success(request, f"Signed in with Google as {email}.")
         return redirect("dashboard")
-    messages.info(request, "Create your shop to finish signing up.")
+    messages.info(request, "Create your shop name to finish signing up.")
     return redirect("setup_company")
 
 
