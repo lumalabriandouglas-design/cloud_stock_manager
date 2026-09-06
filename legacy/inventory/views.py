@@ -674,12 +674,17 @@ def record_stock_in(request):
         company = get_user_company(request)
         item_id = request.POST.get("item_id")
         item_name = request.POST.get("item_name", "").strip()
-        category_id = request.POST.get("category_id")
+        category_name = request.POST.get("category_name", "").strip()
         unit = request.POST.get("unit", Item.UNIT_PCS)
         if unit not in (Item.UNIT_PCS, Item.UNIT_KG):
             unit = Item.UNIT_PCS
         buy_price = request.POST.get("buy_price") or 0
         sell_price = request.POST.get("sell_price") or 0
+        category = None
+        if category_name:
+            category, _ = Category.objects.get_or_create(
+                company=company, name=" ".join(category_name.split()).title()
+            )
         existing = Item.objects.filter(id=item_id, company=company).first() if item_id else None
         if existing:
             item, created = existing, False
@@ -688,7 +693,6 @@ def record_stock_in(request):
                 messages.error(request, "Pick a product or type a new name.")
                 return redirect("dashboard")
             normalized = " ".join(item_name.split()).title()
-            category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
             item, created = Item.objects.get_or_create(
                 company=company, name=normalized,
                 defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0, "unit": unit},
@@ -702,7 +706,7 @@ def record_stock_in(request):
             item.buy_price = buy_price
         if sell_price:
             item.sell_price = sell_price
-        if category and not item.category:
+        if category:
             item.category = category
         item.save()
         StockIn.objects.create(company=company, item=item, quantity_added=quantity)
