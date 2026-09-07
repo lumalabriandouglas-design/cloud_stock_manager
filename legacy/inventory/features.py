@@ -74,15 +74,13 @@ def _google_client_secret() -> str:
 
 
 def _google_redirect_uri(request) -> str:
-    public = _clean_env("PUBLIC_URL") or _clean_env("RAILWAY_PUBLIC_DOMAIN")
+    public = _clean_env("PUBLIC_URL")
     if public:
         if not public.startswith("http"):
             public = f"https://{public}"
         return f"{public.rstrip('/')}/accounts/google/callback/"
-    uri = request.build_absolute_uri("/accounts/google/callback/")
-    if uri.startswith("http://"):
-        uri = "https://" + uri[len("http://") :]
-    return uri
+    host = request.get_host()
+    return f"https://{host}/accounts/google/callback/"
 
 
 def google_start(request):
@@ -102,6 +100,7 @@ def google_start(request):
     redirect_uri = _google_redirect_uri(request)
     state = secrets.token_urlsafe(24)
     request.session["google_oauth_state"] = state
+    request.session["google_oauth_redirect"] = redirect_uri
     request.session["google_oauth_next"] = request.GET.get("next", "")
     params = urllib.parse.urlencode(
         {
@@ -117,6 +116,28 @@ def google_start(request):
     return redirect(f"https://accounts.google.com/o/oauth2/v2/auth?{params}")
 
 
+def _token_error_message(exc) -> str:
+    body = ""
+    if hasattr(exc, "read"):
+        try:
+            body = exc.read().decode("utf-8", "ignore")
+        except Exception:
+            body = ""
+    err = ""
+    if body:
+        try:
+            err = json.loads(body).get("error", "")
+        except Exception:
+            err = body[:180]
+    if err == "redirect_uri_mismatch":
+        return "Google rejected the callback URL. In Google Cloud add exactly https://YOUR-SHOP-HOST/accounts/google/callback/"
+    if err == "invalid_client":
+        return "Google rejected the Client ID or secret. Recheck GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the web service."
+    if err == "invalid_grant":
+        return "That Google sign-in expired. Tap Continue with Gmail again."
+    return "Google sign-in failed. Check the callback URL and try email instead."
+
+
 def google_callback(request):
     if request.GET.get("state") != request.session.get("google_oauth_state"):
         messages.error(request, "Google sign-in expired. Try again.")
@@ -126,7 +147,7 @@ def google_callback(request):
     if not code:
         messages.error(request, "Google sign-in was cancelled.")
         return redirect("login")
-    redirect_uri = _google_redirect_uri(request)
+    redirect_uri = request.session.pop("google_oauth_redirect", None) or _google_redirect_uri(request)
     token_body = urllib.parse.urlencode(
         {
             "code": code,
@@ -157,8 +178,8 @@ def google_callback(request):
             timeout=15,
         ) as resp:
             info = json.loads(resp.read().decode())
-    except Exception:
-        messages.error(request, "Google sign-in failed. Check the callback URL and try email instead.")
+    except Exception as exc:
+        messages.error(request, _token_error_message(exc))
         return redirect("login")
 
     email = (info.get("email") or "").strip().lower()
