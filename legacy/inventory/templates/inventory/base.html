@@ -85,6 +85,7 @@
                 </div>
             </div>
             {% elif request.user.is_superuser %}
+            <a href="{% url 'google_start' %}" class="rounded-md px-3 py-2 text-sm text-muted hover:text-ink">{% if request.user.email %}Switch Gmail{% else %}Connect Gmail{% endif %}</a>
             <a href="{% url 'platform_create_business' %}" class="hidden rounded-md px-3 py-2 text-sm text-muted hover:text-ink sm:inline">New business</a>
             {% endif %}
             <form action="{% url 'logout' %}" method="post">{% csrf_token %}

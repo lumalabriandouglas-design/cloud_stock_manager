@@ -56,6 +56,14 @@ def apply_invite(user: User) -> bool:
     return True
 
 
+def _after_auth_redirect(user):
+    if hasattr(user, "profile"):
+        return redirect("dashboard")
+    if getattr(user, "is_superuser", False):
+        return redirect("platform_admin")
+    return redirect("setup_company")
+
+
 def _clean_env(name: str) -> str:
     value = os.getenv(name, "") or ""
     return value.replace("\n", "").replace("\r", "").replace(" ", "").strip().strip('"').strip("'")
@@ -192,13 +200,13 @@ def google_callback(request):
         taken = User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists()
         if taken:
             messages.error(request, f"{email} is already linked to another account.")
-            return redirect("dashboard" if hasattr(request.user, "profile") else "login")
+            return _after_auth_redirect(request.user)
         request.user.email = email
         if not request.user.first_name and name:
             request.user.first_name = name[:30]
         request.user.save()
         messages.success(request, f"Gmail connected: {email}. You can sign in with it next time.")
-        return redirect("dashboard" if hasattr(request.user, "profile") else "platform_admin")
+        return _after_auth_redirect(request.user)
 
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
@@ -207,21 +215,11 @@ def google_callback(request):
         return render(request, "inventory/link_google.html", {"email": email, "name": name})
     apply_invite(user)
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-    if hasattr(user, "profile"):
-        messages.success(request, f"Signed in with Google as {email}.")
-        return redirect("dashboard")
-    messages.info(request, "Create your shop name to finish signing up.")
-    return redirect("setup_company")
+    messages.success(request, f"Signed in with Google as {email}.")
+    return _after_auth_redirect(user)
 
 
-@login_required
-def skip_link_google(request):
-    request.session.pop("pending_google_email", None)
-    request.session.pop("pending_google_name", None)
-    return redirect("dashboard")
-
-
-
+def finish_google(request):
     email = (request.session.get("pending_google_email") or "").strip().lower()
     name = (request.session.get("pending_google_name") or "").strip()
     if not email:
@@ -246,11 +244,8 @@ def skip_link_google(request):
         request.session.pop("pending_google_name", None)
         apply_invite(user)
         login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-        if hasattr(user, "profile"):
-            messages.success(request, f"Signed in with Google as {email}.")
-            return redirect("dashboard")
-        messages.info(request, "Create your shop name to finish signing up.")
-        return redirect("setup_company")
+        messages.success(request, f"Signed in with Google as {email}.")
+        return _after_auth_redirect(user)
 
     username = request.POST.get("username", "").strip()
     password = request.POST.get("password", "")
@@ -268,8 +263,8 @@ def skip_link_google(request):
     request.session.pop("pending_google_name", None)
     apply_invite(user)
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-    messages.success(request, f"Gmail {email} is now on this shop account. Use it to sign in next time.")
-    return redirect("dashboard" if hasattr(user, "profile") else "setup_company")
+    messages.success(request, f"Gmail {email} is now on this account. Use it to sign in next time.")
+    return _after_auth_redirect(user)
 
 
 def password_reset_request(request):
