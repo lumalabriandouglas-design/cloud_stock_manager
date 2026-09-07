@@ -221,7 +221,7 @@ def skip_link_google(request):
     return redirect("dashboard")
 
 
-def finish_google(request):
+
     email = (request.session.get("pending_google_email") or "").strip().lower()
     name = (request.session.get("pending_google_name") or "").strip()
     if not email:
