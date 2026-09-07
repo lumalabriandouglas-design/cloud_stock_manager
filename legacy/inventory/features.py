@@ -11,7 +11,7 @@ import urllib.request
 from datetime import timedelta
 
 from django.contrib import messages
-from django.contrib.auth import login
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
@@ -187,17 +187,24 @@ def google_callback(request):
         messages.error(request, "Google did not share an email address.")
         return redirect("login")
     name = (info.get("name") or email.split("@")[0]).strip()
+
+    if request.user.is_authenticated:
+        taken = User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists()
+        if taken:
+            messages.error(request, f"{email} is already linked to another account.")
+            return redirect("dashboard" if hasattr(request.user, "profile") else "login")
+        request.user.email = email
+        if not request.user.first_name and name:
+            request.user.first_name = name[:30]
+        request.user.save()
+        messages.success(request, f"Gmail connected: {email}. You can sign in with it next time.")
+        return redirect("dashboard" if hasattr(request.user, "profile") else "platform_admin")
+
     user = User.objects.filter(email__iexact=email).first()
     if user is None:
-        base = "".join(ch for ch in email.split("@")[0] if ch.isalnum() or ch in "._-")[:20] or "shop"
-        username = base
-        n = 1
-        while User.objects.filter(username__iexact=username).exists():
-            n += 1
-            username = f"{base}{n}"
-        user = User.objects.create_user(username=username, email=email, first_name=name[:30])
-        user.set_unusable_password()
-        user.save()
+        request.session["pending_google_email"] = email
+        request.session["pending_google_name"] = name
+        return render(request, "inventory/link_google.html", {"email": email, "name": name})
     apply_invite(user)
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     if hasattr(user, "profile"):
@@ -205,6 +212,64 @@ def google_callback(request):
         return redirect("dashboard")
     messages.info(request, "Create your shop name to finish signing up.")
     return redirect("setup_company")
+
+
+@login_required
+def skip_link_google(request):
+    request.session.pop("pending_google_email", None)
+    request.session.pop("pending_google_name", None)
+    return redirect("dashboard")
+
+
+def finish_google(request):
+    email = (request.session.get("pending_google_email") or "").strip().lower()
+    name = (request.session.get("pending_google_name") or "").strip()
+    if not email:
+        return redirect("login")
+    if request.method != "POST":
+        return render(request, "inventory/link_google.html", {"email": email, "name": name})
+
+    action = request.POST.get("action")
+    if action == "create":
+        user = User.objects.filter(email__iexact=email).first()
+        if user is None:
+            base = "".join(ch for ch in email.split("@")[0] if ch.isalnum() or ch in "._-")[:20] or "shop"
+            username = base
+            n = 1
+            while User.objects.filter(username__iexact=username).exists():
+                n += 1
+                username = f"{base}{n}"
+            user = User.objects.create_user(username=username, email=email, first_name=name[:30])
+            user.set_unusable_password()
+            user.save()
+        request.session.pop("pending_google_email", None)
+        request.session.pop("pending_google_name", None)
+        apply_invite(user)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        if hasattr(user, "profile"):
+            messages.success(request, f"Signed in with Google as {email}.")
+            return redirect("dashboard")
+        messages.info(request, "Create your shop name to finish signing up.")
+        return redirect("setup_company")
+
+    username = request.POST.get("username", "").strip()
+    password = request.POST.get("password", "")
+    user = authenticate(request, username=username, password=password)
+    if user is None:
+        messages.error(request, "That username or password is wrong.")
+        return render(request, "inventory/link_google.html", {"email": email, "name": name})
+    taken = User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists()
+    if taken:
+        messages.error(request, f"{email} is already linked to another account.")
+        return render(request, "inventory/link_google.html", {"email": email, "name": name})
+    user.email = email
+    user.save(update_fields=["email"])
+    request.session.pop("pending_google_email", None)
+    request.session.pop("pending_google_name", None)
+    apply_invite(user)
+    login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    messages.success(request, f"Gmail {email} is now on this shop account. Use it to sign in next time.")
+    return redirect("dashboard" if hasattr(user, "profile") else "setup_company")
 
 
 def password_reset_request(request):

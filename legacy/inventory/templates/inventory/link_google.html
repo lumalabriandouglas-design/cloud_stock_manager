@@ -1,0 +1,29 @@
+{% extends "inventory/base.html" %}
+{% block title %}Connect Gmail – Cloud Stock Manager{% endblock %}
+{% block content %}
+<div class="mx-auto w-full max-w-md">
+    <p class="text-xs font-medium uppercase tracking-wide text-muted">Cloud Stock Manager</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Connect Gmail</h1>
+    <p class="mt-2 text-sm text-muted">{{ email }} is not on a shop yet. Link it to an account that already exists, or start a new shop.</p>
+    <div class="card mt-6 space-y-6 p-5 sm:p-8">
+        <form method="post" action="{% url 'finish_google' %}" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="link">
+            <p class="text-sm font-medium">This shop already exists</p>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Username or email</span>
+                <input type="text" name="username" required class="field h-12"></label>
+            <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Password</span>
+                <input type="password" name="password" required class="field h-12"></label>
+            <button type="submit" class="btn-primary h-12 w-full">Link Gmail to this account</button>
+        </form>
+        <div class="flex items-center gap-3 text-xs uppercase tracking-wide text-muted">
+            <span class="h-px flex-1 bg-line"></span>or<span class="h-px flex-1 bg-line"></span>
+        </div>
+        <form method="post" action="{% url 'finish_google' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create">
+            <button type="submit" class="flex h-12 w-full items-center justify-center rounded-md border border-line text-sm font-medium">This is a new shop</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

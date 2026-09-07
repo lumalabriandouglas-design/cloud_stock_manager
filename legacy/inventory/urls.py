@@ -11,6 +11,7 @@ urlpatterns = [
 
     path("accounts/google/", features.google_start, name="google_start"),
     path("accounts/google/callback/", features.google_callback, name="google_callback"),
+    path("accounts/google/link/", features.finish_google, name="finish_google"),
     path("accounts/password-reset/", features.password_reset_request, name="password_reset_request"),
     path("accounts/password-reset/confirm/", features.password_reset_confirm, name="password_reset_confirm"),
 
