@@ -403,12 +403,12 @@ def import_inventory(request):
             if cat_name:
                 category, _ = Category.objects.get_or_create(company=company, name=str(cat_name).strip().title())
             qty = _to_decimal(_row_get(row, "quantity", "qty", "stock", "quantity_in_stock"), 0)
-            reorder = _to_decimal(_row_get(row, "reorder_level", "reorder", "min_stock"), 5)
+            reorder = _to_decimal(_row_get(row, "reorder_level", "reorder", "min_stock"), 2)
             item, is_new = Item.objects.get_or_create(
                 company=company, name=normalized,
                 defaults={
                     "category": category, "buy_price": buy, "sell_price": sell,
-                    "quantity_in_stock": max(Decimal("0"), qty), "reorder_level": reorder if reorder > 0 else 5,
+                    "quantity_in_stock": max(Decimal("0"), qty), "reorder_level": reorder if reorder > 0 else 2,
                     "unit": unit,
                 },
             )
@@ -590,7 +590,7 @@ def edit_item(request, item_id):
             unit = Item.UNIT_PCS
         buy_price = request.POST.get("buy_price") or 0
         sell_price = request.POST.get("sell_price") or 0
-        reorder_raw = request.POST.get("reorder_level") or "5"
+        reorder_raw = request.POST.get("reorder_level") or "2"
         qty_adjust = request.POST.get("qty_adjust")
         if not name:
             messages.error(request, "Name required.")
@@ -602,7 +602,7 @@ def edit_item(request, item_id):
             item.category = Category.objects.filter(id=category_id, company=company).first() if category_id else None
             item.buy_price = buy_price
             item.sell_price = sell_price
-            reorder = parse_qty(reorder_raw, unit) or (Decimal("0.5") if unit == Item.UNIT_KG else Decimal("5"))
+            reorder = parse_qty(reorder_raw, unit) or Decimal("2")
             item.reorder_level = reorder
             if qty_adjust and profile.has_perm("can_manage_stock"):
                 delta = parse_qty(qty_adjust.lstrip("+"), unit)
@@ -782,7 +782,7 @@ def record_stock_in(request):
             normalized = " ".join(item_name.split()).title()
             item, created = Item.objects.get_or_create(
                 company=company, name=normalized,
-                defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0, "unit": unit},
+                defaults={"category": category, "buy_price": buy_price, "sell_price": sell_price, "quantity_in_stock": 0, "unit": unit, "reorder_level": Decimal("2")},
             )
         quantity = parse_qty(request.POST.get("quantity", "0"), item.unit)
         if not quantity:
@@ -795,6 +795,15 @@ def record_stock_in(request):
             item.sell_price = sell_price
         if category:
             item.category = category
+        if created:
+            reorder_raw = request.POST.get("reorder_level") or "2"
+            try:
+                posted_reorder = Decimal(str(reorder_raw).replace(",", "").strip() or "2")
+            except (InvalidOperation, ValueError):
+                posted_reorder = Decimal("2")
+            if posted_reorder < 0:
+                posted_reorder = Decimal("2")
+            item.reorder_level = posted_reorder
         item.save()
         StockIn.objects.create(company=company, item=item, quantity_added=quantity)
         log_activity(company, request.user, ActivityLog.ACTION_STOCK_IN, f"+{item.format_qty(quantity)} {item.name}")

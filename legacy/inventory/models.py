@@ -163,7 +163,7 @@ class Item(models.Model):
     buy_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     sell_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     quantity_in_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
-    reorder_level = models.DecimalField(max_digits=12, decimal_places=3, default=5)
+    reorder_level = models.DecimalField(max_digits=12, decimal_places=3, default=2)
 
     class Meta:
         unique_together = ("company", "name")
