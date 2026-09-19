@@ -37,6 +37,8 @@ urlpatterns = [
     path("export/sales/", views.export_sales_csv, name="export_sales_csv"),
 
     path("record-sale/", views.record_sale, name="record_sale"),
+    path("sales/<int:sale_id>/edit/", views.edit_sale, name="edit_sale"),
+    path("sales/<int:sale_id>/delete/", views.delete_sale, name="delete_sale"),
     path("record-stock-in/", views.record_stock_in, name="record_stock_in"),
     path("scan-ledger/", views.scan_ledger, name="scan_ledger"),
 ]

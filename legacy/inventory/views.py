@@ -670,6 +670,92 @@ def record_sale(request):
 @login_required
 @require_perm("can_manage_stock")
 @require_active_sub
+def edit_sale(request, sale_id):
+    company = get_user_company(request)
+    sale = get_object_or_404(Sale, id=sale_id, company=company)
+    items = Item.objects.filter(company=company).order_by("name")
+    if request.method == "POST":
+        item_id = request.POST.get("item_id")
+        custom_price = request.POST.get("sell_price")
+        new_item = get_object_or_404(Item, id=item_id, company=company)
+        quantity = parse_qty(request.POST.get("quantity", "1"), new_item.unit)
+        if not quantity:
+            messages.error(request, "Enter a valid quantity.")
+            return render(
+                request,
+                "inventory/edit_sale.html",
+                {
+                    "company": company,
+                    "sale": sale,
+                    "items": items,
+                    "profile": get_profile(request),
+                    **perm_context(get_profile(request)),
+                },
+            )
+        sell_price = custom_price if custom_price else new_item.sell_price
+        old_item = sale.item
+        old_qty = sale.quantity_sold
+        available = new_item.quantity_in_stock
+        if old_item.id == new_item.id:
+            available += old_qty
+        if available < quantity:
+            messages.error(request, f"Only {new_item.format_qty(available)} of {new_item.name} can be sold.")
+            return redirect("edit_sale", sale_id=sale.id)
+        old_item.quantity_in_stock += old_qty
+        old_item.save()
+        new_item.refresh_from_db()
+        new_item.quantity_in_stock -= quantity
+        new_item.save()
+        sale.item = new_item
+        sale.quantity_sold = quantity
+        sale.sell_price = sell_price
+        sale.save()
+        log_activity(
+            company,
+            request.user,
+            ActivityLog.ACTION_SALE,
+            f"Corrected sale to {new_item.format_qty(quantity)} {new_item.name}",
+        )
+        notify_low_stock(company, new_item)
+        if old_item.id != new_item.id:
+            notify_low_stock(company, old_item)
+        messages.success(request, "Sale updated.")
+        return redirect("sell")
+    return render(
+        request,
+        "inventory/edit_sale.html",
+        {
+            "company": company,
+            "sale": sale,
+            "items": items,
+            "profile": get_profile(request),
+            **perm_context(get_profile(request)),
+        },
+    )
+
+
+@login_required
+@require_perm("can_manage_stock")
+@require_active_sub
+@require_POST
+def delete_sale(request, sale_id):
+    company = get_user_company(request)
+    sale = get_object_or_404(Sale, id=sale_id, company=company)
+    item = sale.item
+    qty = sale.quantity_sold
+    item.quantity_in_stock += qty
+    item.save()
+    label = item.format_qty(qty)
+    name = item.name
+    sale.delete()
+    log_activity(company, request.user, ActivityLog.ACTION_SALE, f"Removed sale of {label} {name}")
+    messages.success(request, f"Sale removed. {label} {name} is back in stock.")
+    return redirect("sell")
+
+
+@login_required
+@require_perm("can_manage_stock")
+@require_active_sub
 def record_stock_in(request):
     if request.method == "POST":
         company = get_user_company(request)
