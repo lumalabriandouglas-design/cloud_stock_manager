@@ -66,6 +66,7 @@
             <nav class="hidden items-center gap-1 md:flex">
                 <a href="{% url 'dashboard' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'dashboard' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Inventory</a>
                 <a href="{% url 'sell' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'sell' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Sell</a>
+                {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="rounded-md px-3 py-2 text-sm {% if request.resolver_match.url_name == 'sales_report' %}bg-good-bg font-medium text-primary{% else %}text-muted hover:bg-surface hover:text-ink{% endif %}">Reports</a>{% endif %}
             </nav>
             <div class="relative">
                 <button type="button" id="more-btn" aria-label="More" class="grid size-10 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink">
@@ -73,7 +74,6 @@
                 </button>
                 <div id="more-menu" class="absolute right-0 z-50 mt-1 hidden w-56 rounded-md bg-surface py-1 shadow-card">
                     {% if can_view_reports %}<a href="{% url 'today' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Today’s numbers</a>{% endif %}
-                    {% if can_view_reports %}<a href="{% url 'sales_report' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Sales report</a>{% endif %}
                     {% if can_view_reports %}<a href="{% url 'export_inventory_csv' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Export stock</a>{% endif %}
                     {% if can_view_reports %}<a href="{% url 'export_sales_csv' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Export sales</a>{% endif %}
                     {% if can_manage_stock %}<a href="{% url 'import_inventory' %}" class="flex w-full items-center gap-2 px-3 py-2.5 text-sm hover:bg-bg">Import</a>{% endif %}
@@ -107,7 +107,7 @@
 
 {% if company %}
 <nav class="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface md:hidden">
-    <div class="grid grid-cols-2">
+    <div class="grid {% if can_view_reports %}grid-cols-3{% else %}grid-cols-2{% endif %}">
         <a href="{% url 'dashboard' %}" class="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs {% if request.resolver_match.url_name == 'dashboard' %}text-primary{% else %}text-muted{% endif %}">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
             Inventory
@@ -116,6 +116,12 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
             Sell
         </a>
+        {% if can_view_reports %}
+        <a href="{% url 'sales_report' %}" class="flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs {% if request.resolver_match.url_name == 'sales_report' %}text-primary{% else %}text-muted{% endif %}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 16v-5"/><path d="M12 16V8"/><path d="M17 16v-8"/></svg>
+            Reports
+        </a>
+        {% endif %}
     </div>
 </nav>
 <script>
