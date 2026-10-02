@@ -111,6 +111,34 @@ def notify_low_stock(company, item):
         pass
 
 
+def send_staff_invite(request, company, email):
+    """Email the invited person. Returns True only if the message left the server."""
+    if not os.getenv("EMAIL_HOST"):
+        return False
+    register_url = request.build_absolute_uri("/register/")
+    login_url = request.build_absolute_uri("/accounts/login/")
+    body = (
+        f"{company.name} invited you to Cloud Stock Manager.\n\n"
+        f"Register with this same email (you choose your own username and password):\n"
+        f"{register_url}\n\n"
+        f"Or sign in with Google if that Gmail is this address:\n"
+        f"{login_url}\n\n"
+        "You will join their shop. You do not start a new one.\n"
+        "If you already belong to another shop, this invite cannot move you."
+    )
+    try:
+        send_mail(
+            f"Join {company.name} on Cloud Stock Manager",
+            body,
+            None,
+            [email],
+            fail_silently=False,
+        )
+        return True
+    except Exception:
+        return False
+
+
 def notify_admin_payment_claim(company, sub):
     admin_email = os.getenv("PAYMENT_NOTIFY_EMAIL", "")
     if not admin_email:
@@ -493,7 +521,10 @@ def manage_team(request):
                         can_manage_categories=request.POST.get("can_manage_categories") == "on" or role == UserProfile.ROLE_OWNER,
                         can_manage_team=request.POST.get("can_manage_team") == "on" or role == UserProfile.ROLE_OWNER,
                     )
-                    messages.success(request, f"Invite saved for {email}. They join when they sign in or register with that email.")
+                    if send_staff_invite(request, company, email):
+                        messages.success(request, f"Invite emailed to {email}. They join when they register or use Google with that address.")
+                    else:
+                        messages.success(request, f"Invite saved for {email}, but the email did not send. Tell them yourself, and check EMAIL_HOST on Railway.")
             elif not username or len(password) < 6:
                 messages.error(request, "Username and password (min 6 chars) required — or invite by email only.")
             elif User.objects.filter(username__iexact=username).exists():
