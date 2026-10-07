@@ -13,17 +13,11 @@
     <a href="?days=365" class="rounded-md px-3 py-1.5 text-sm {% if days == 365 %}bg-primary text-primary-fg{% else %}bg-surface shadow-card text-muted{% endif %}">1 year</a>
 </div>
 <div class="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-    <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Revenue</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight sm:text-2xl">UGX {{ total_revenue|ugx }}</p></div>
+    <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Revenue</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight sm:text-2xl">UGX {{ total_revenue|ugx }}</p><p class="mt-1 text-xs text-muted">Sales {{ sales_revenue|ugx }}</p><p class="text-xs text-muted">Debt collected {{ debt_collected|ugx }}</p></div>
     <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Cost</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight sm:text-2xl">UGX {{ total_cost|ugx }}</p></div>
     <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Profit</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight sm:text-2xl {% if total_profit >= 0 %}text-primary{% else %}text-danger{% endif %}">UGX {{ total_profit|ugx }}</p></div>
     <div class="card p-5"><p class="text-xs uppercase tracking-wide text-muted">Units</p><p class="mt-1 font-serif text-2xl font-semibold">{{ total_qty }}</p></div>
 </div>
-{% with owed=debt_totals.owed_to_shop owes=debt_totals.shop_owes %}
-<a href="{% url 'debts' %}" class="mt-3 grid grid-cols-2 gap-3">
-    <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Customers owe shop</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight text-primary sm:text-2xl">UGX {{ owed.unpaid|ugx }}</p><p class="mt-1 text-xs text-muted">{{ owed.open }} unpaid{% if owed.overdue %} · <span class="font-semibold text-danger">{{ owed.overdue }} overdue</span>{% endif %}</p></div>
-    <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Shop owes suppliers</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight text-accent sm:text-2xl">UGX {{ owes.unpaid|ugx }}</p><p class="mt-1 text-xs text-muted">{{ owes.open }} unpaid{% if owes.overdue %} · <span class="font-semibold text-danger">{{ owes.overdue }} overdue</span>{% endif %}</p></div>
-</a>
-{% endwith %}
 <section class="card mt-6 overflow-hidden">
     <div class="border-b border-line px-5 py-4 flex justify-between"><h2 class="text-lg font-semibold">Transactions</h2><span class="text-sm text-muted">{{ sales|length }}</span></div>
     <div class="overflow-x-auto">
@@ -46,4 +40,11 @@
         </table>
     </div>
 </section>
+<h2 class="mt-8 text-lg font-semibold">Debts</h2>
+{% with owed=debt_totals.owed_to_shop owes=debt_totals.shop_owes %}
+<a href="{% url 'debts' %}" class="mt-6 grid grid-cols-2 gap-3">
+    <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Customers owe shop</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight text-primary sm:text-2xl">UGX {{ owed.unpaid|ugx }}</p><p class="mt-1 text-xs text-muted">{{ owed.open }} unpaid{% if owed.overdue %} · <span class="font-semibold text-danger">{{ owed.overdue }} overdue</span>{% endif %}</p></div>
+    <div class="card min-w-0 overflow-hidden p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Shop owes suppliers</p><p class="mt-1 break-words font-serif text-lg font-semibold leading-tight text-accent sm:text-2xl">UGX {{ owes.unpaid|ugx }}</p><p class="mt-1 text-xs text-muted">{{ owes.open }} unpaid{% if owes.overdue %} · <span class="font-semibold text-danger">{{ owes.overdue }} overdue</span>{% endif %}</p></div>
+</a>
+{% endwith %}
 {% endblock %}

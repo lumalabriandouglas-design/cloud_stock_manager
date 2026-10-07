@@ -659,14 +659,16 @@ def sales_report(request):
     days = int(request.GET.get("days", 30))
     since = timezone.now() - timezone.timedelta(days=days)
     sales = Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date")
-    total_revenue = sum(s.line_total for s in sales)
+    sales_revenue = sum(s.line_total for s in sales)
     total_cost = sum(s.estimated_cost for s in sales)
-    from .debts import debt_totals
+    from .debts import debt_collected, debt_totals
+    collected = debt_collected(company, since)
     return render(request, "inventory/sales_report.html", {
         "debt_totals": debt_totals(company),
         "company": company, "sales": sales, "days": days,
-        "total_revenue": total_revenue, "total_cost": total_cost,
-        "total_profit": total_revenue - total_cost, "total_qty": sum(s.quantity_sold for s in sales),
+        "sales_revenue": sales_revenue, "debt_collected": collected,
+        "total_revenue": sales_revenue + collected, "total_cost": total_cost,
+        "total_profit": sales_revenue - total_cost, "total_qty": sum(s.quantity_sold for s in sales),
         "profile": profile, "is_platform_admin": request.user.is_superuser, **perm_context(profile),
     })
 

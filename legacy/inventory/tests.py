@@ -127,3 +127,45 @@ class DebtViewTests(TestCase):
         r = self.client.get(reverse("sales_report"))
         self.assertContains(r, "Customers owe shop")
         self.assertContains(r, "Shop owes suppliers")
+
+
+class DebtCollectedRevenueTests(TestCase):
+    def setUp(self):
+        from .models import Item, Sale
+        self.company, self.owner = make_shop("Shop R", "owner_r")
+        item = Item.objects.create(company=self.company, name="Sugar", buy_price=4000, sell_price=5000, quantity_in_stock=10)
+        Sale.objects.create(company=self.company, item=item, quantity_sold=2, sell_price=5000)  # 10,000 sales
+        today = timezone.localdate()
+        cust = Debt.objects.create(company=self.company, direction=Debt.OWED_TO_SHOP, party_name="Grace", amount=Decimal("50000"))
+        DebtPayment.objects.create(debt=cust, amount=Decimal("20000"), paid_on=today - timedelta(days=2))
+        DebtPayment.objects.create(debt=cust, amount=Decimal("7000"), paid_on=today - timedelta(days=20))
+        supp = Debt.objects.create(company=self.company, direction=Debt.SHOP_OWES, party_name="Kakira", amount=Decimal("900000"))
+        DebtPayment.objects.create(debt=supp, amount=Decimal("300000"), paid_on=today - timedelta(days=1))
+        other, _ = make_shop("Shop Other", "owner_o")
+        od = Debt.objects.create(company=other, direction=Debt.OWED_TO_SHOP, party_name="X", amount=Decimal("99999"))
+        DebtPayment.objects.create(debt=od, amount=Decimal("99999"), paid_on=today)
+        self.client.force_login(self.owner)
+
+    def test_collected_counts_customer_payments_in_period(self):
+        r = self.client.get(reverse("sales_report") + "?days=30")
+        self.assertEqual(r.context["sales_revenue"], Decimal("10000"))
+        self.assertEqual(r.context["debt_collected"], Decimal("27000"))
+        self.assertEqual(r.context["total_revenue"], Decimal("37000"))
+        self.assertContains(r, "Debt collected")
+
+    def test_period_filters_by_payment_date(self):
+        r = self.client.get(reverse("sales_report") + "?days=7")
+        self.assertEqual(r.context["debt_collected"], Decimal("20000"))
+        self.assertEqual(r.context["total_revenue"], Decimal("30000"))
+
+    def test_supplier_payments_never_revenue(self):
+        r = self.client.get(reverse("sales_report") + "?days=365")
+        self.assertEqual(r.context["debt_collected"], Decimal("27000"))
+
+    def test_profit_not_double_counted(self):
+        r = self.client.get(reverse("sales_report") + "?days=30")
+        self.assertEqual(r.context["total_profit"], Decimal("2000"))
+
+    def test_debt_section_at_bottom(self):
+        html = self.client.get(reverse("sales_report")).content.decode()
+        self.assertGreater(html.index("Customers owe shop"), html.index("Transactions"))

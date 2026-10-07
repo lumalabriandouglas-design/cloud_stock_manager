@@ -62,6 +62,18 @@ def debt_totals(company) -> dict:
     return out
 
 
+def debt_collected(company, since) -> Decimal:
+    """Customer ('Owed to shop') payments received on or after `since`, by payment date.
+
+    Supplier payments ('Shop owes') are money going out and never count as revenue.
+    """
+    since_date = since.date() if hasattr(since, "date") else since
+    total = DebtPayment.objects.filter(
+        debt__company=company, debt__direction=Debt.OWED_TO_SHOP, paid_on__gte=since_date,
+    ).aggregate(t=Sum("amount"))["t"]
+    return total or Decimal("0")
+
+
 def _ctx(request, profile, **extra):
     return {"company": profile.company, "profile": profile, **perm_context(profile), **extra}
 
