@@ -1,0 +1,94 @@
+<div id="toast-root" aria-live="polite" class="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6"></div>
+<script>
+/* No-reload saves. Forms with data-ajax post via fetch; [data-live] regions are refreshed in place.
+   Without JS the same forms submit normally. */
+(function () {
+  if (!window.fetch || !window.DOMParser) return;
+  window.__csmNoReload = true;
+
+  function toast(text, level) {
+    var root = document.getElementById("toast-root");
+    if (!root) return;
+    var el = document.createElement("div");
+    el.className = "pointer-events-auto rounded-md px-4 py-2.5 text-sm shadow-card " +
+      (level === "error" ? "bg-danger-bg text-danger" : "bg-good-bg text-primary");
+    el.setAttribute("role", "status");
+    el.textContent = text;
+    root.appendChild(el);
+    setTimeout(function () { el.style.transition = "opacity .3s"; el.style.opacity = "0"; }, 2600);
+    setTimeout(function () { el.remove(); }, 3000);
+  }
+
+  function showError(form, text) {
+    var box = form.querySelector("[data-ajax-error]");
+    if (!box) {
+      box = document.createElement("p");
+      box.setAttribute("data-ajax-error", "");
+      box.setAttribute("role", "alert");
+      form.insertBefore(box, form.firstChild.nextSibling);
+    }
+    box.className = "rounded-md bg-danger-bg px-3 py-2 text-sm text-danger";
+    box.textContent = text;
+    box.hidden = false;
+  }
+
+  function clearError(form) {
+    var box = form.querySelector("[data-ajax-error]");
+    if (box) box.hidden = true;
+  }
+
+  function refreshLive(url) {
+    return fetch(url, { headers: { "X-Partial": "1" }, credentials: "same-origin" })
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        document.querySelectorAll("[data-live]").forEach(function (el) {
+          var fresh = doc.getElementById(el.id);
+          if (!fresh) return;
+          var keep = (el.tagName === "SELECT" || el.tagName === "INPUT") ? el.value : null;
+          el.replaceWith(fresh);
+          if (keep !== null && fresh.querySelector && "value" in fresh) {
+            fresh.value = keep;
+            if (fresh.value !== keep) fresh.value = "";
+          }
+        });
+        document.dispatchEvent(new CustomEvent("csm:live-updated"));
+      });
+  }
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form.matches || !form.matches("form[data-ajax]") || e.defaultPrevented) return;
+    e.preventDefault();
+    var btn = form.querySelector("button[type=submit], button:not([type])");
+    if (btn) btn.disabled = true;
+    clearError(form);
+    fetch(form.action || location.href, {
+      method: "POST",
+      body: new FormData(form),
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "XMLHttpRequest", "Accept": "application/json" }
+    }).then(function (r) {
+      return r.json().catch(function () { return { ok: false, messages: [{ level: "error", text: "Something went wrong. Try again." }] }; });
+    }).then(function (data) {
+      var msgs = data.messages || [];
+      if (!data.ok) {
+        var err = msgs.filter(function (m) { return m.level === "error"; })[0] || msgs[0];
+        showError(form, err ? err.text : "Could not save.");
+        return;
+      }
+      var mode = form.getAttribute("data-ajax");
+      if (data.redirect && data.redirect.indexOf("/accounts/login") === 0) { location.href = data.redirect; return; }
+      if (mode === "follow" && data.redirect) { location.href = data.redirect; return; }
+      msgs.forEach(function (m) { toast(m.text, m.level); });
+      if (form.hasAttribute("data-ajax-reset")) form.reset();
+      form.querySelectorAll("[data-clear-on-save]").forEach(function (i) { i.value = ""; });
+      return refreshLive(location.href);
+    }).catch(function () {
+      showError(form, "No connection. Your entry is still here, try again.");
+    }).finally(function () {
+      if (btn && document.body.contains(btn)) btn.disabled = false;
+    });
+  });
+})();
+</script>

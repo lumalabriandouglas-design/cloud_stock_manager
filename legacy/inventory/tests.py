@@ -169,3 +169,86 @@ class DebtCollectedRevenueTests(TestCase):
     def test_debt_section_at_bottom(self):
         html = self.client.get(reverse("sales_report")).content.decode()
         self.assertGreater(html.index("Customers owe shop"), html.index("Transactions"))
+
+
+AJAX = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
+
+
+class NoReloadSaveTests(TestCase):
+    def setUp(self):
+        from .models import Item
+        self.company, self.owner = make_shop("Shop N", "owner_n")
+        self.item = Item.objects.create(company=self.company, name="Soap", buy_price=2500, sell_price=3500, quantity_in_stock=10)
+        self.client.force_login(self.owner)
+
+    def test_record_sale_json(self):
+        r = self.client.post(reverse("record_sale"), {"item_id": self.item.id, "quantity": "2"}, **AJAX)
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["redirect"], reverse("sell"))
+        self.assertIn("Sold", data["messages"][0]["text"])
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity_in_stock, 8)
+
+    def test_record_sale_error_json(self):
+        r = self.client.post(reverse("record_sale"), {"item_id": self.item.id, "quantity": "99"}, **AJAX)
+        self.assertEqual(r.status_code, 400)
+        self.assertFalse(r.json()["ok"])
+        self.assertEqual(r.json()["messages"][0]["level"], "error")
+
+    def test_without_js_still_redirects(self):
+        r = self.client.post(reverse("record_sale"), {"item_id": self.item.id, "quantity": "1"})
+        self.assertEqual(r.status_code, 302)
+
+    def test_edit_item_json(self):
+        r = self.client.post(reverse("edit_item", args=[self.item.id]), {
+            "name": "Bar soap", "unit": "pcs", "buy_price": "2600", "sell_price": "3600", "reorder_level": "2", "qty_adjust": "5"}, **AJAX)
+        self.assertTrue(r.json()["ok"])
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.name.lower(), "bar soap")
+        self.assertEqual(self.item.quantity_in_stock, 15)
+
+    def test_delete_item_json(self):
+        r = self.client.post(reverse("delete_item", args=[self.item.id]), **AJAX)
+        self.assertTrue(r.json()["ok"])
+        self.assertEqual(r.json()["redirect"], reverse("dashboard"))
+
+    def test_stock_in_json(self):
+        r = self.client.post(reverse("record_stock_in"), {"item_id": self.item.id, "item_name": "Soap", "quantity": "3", "unit": "pcs"}, **AJAX)
+        self.assertTrue(r.json()["ok"])
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity_in_stock, 13)
+
+    def test_debt_payment_json(self):
+        d = Debt.objects.create(company=self.company, direction=Debt.OWED_TO_SHOP, party_name="G", amount=Decimal("100"))
+        r = self.client.post(reverse("debt_pay", args=[d.id]), {"amount": "40"}, **AJAX)
+        self.assertTrue(r.json()["ok"])
+        r = self.client.post(reverse("debt_pay", args=[d.id]), {"amount": "500"}, **AJAX)
+        self.assertEqual(r.status_code, 400)
+
+    def test_permission_still_enforced(self):
+        staff = User.objects.create_user("nostock", "n@x.test", "pw-12345!")
+        UserProfile.objects.create(user=staff, company=self.company, role=UserProfile.ROLE_STAFF, can_manage_stock=False)
+        self.client.force_login(staff)
+        r = self.client.post(reverse("record_sale"), {"item_id": self.item.id, "quantity": "1"}, **AJAX)
+        self.assertFalse(r.json()["ok"])
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity_in_stock, 10)
+
+    def test_other_shop_gets_404(self):
+        _, other = make_shop("Shop Z", "owner_z")
+        self.client.force_login(other)
+        r = self.client.post(reverse("edit_item", args=[self.item.id]), {"name": "x"}, **AJAX)
+        self.assertEqual(r.status_code, 404)
+
+    def test_csrf_enforced(self):
+        from django.test import Client
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.owner)
+        r = c.post(reverse("record_sale"), {"item_id": self.item.id, "quantity": "1"}, **AJAX)
+        self.assertEqual(r.status_code, 403)
+
+    def test_pages_have_live_regions(self):
+        self.assertContains(self.client.get(reverse("sell")), 'id="sell-today" data-live')
+        self.assertContains(self.client.get(reverse("dashboard")), 'id="dash-inventory" data-live')

@@ -14,7 +14,7 @@
     </div>
     {% endif %}
 
-    <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4" id="dash-cards" data-live>
         <div class="card min-w-0 overflow-hidden p-3 sm:p-5">
             <p class="text-[10px] font-medium uppercase tracking-wide text-muted sm:text-xs">Products</p>
             <p class="mt-1 font-serif text-xl font-semibold sm:text-2xl">{{ items.count }}</p>
@@ -33,7 +33,7 @@
         </div>
     </div>
 
-    {% if low_stock_items %}
+    <div id="dash-low" data-live>{% if low_stock_items %}
     <div class="mt-6 rounded-lg bg-warn-bg p-4 sm:p-5">
         <div class="mb-3 flex items-center justify-between">
             <h2 class="text-lg font-semibold text-warn">Needs restocking</h2>
@@ -49,13 +49,13 @@
             </li>{% endfor %}
         </ul>
     </div>
-    {% endif %}
+    {% endif %}</div>
 
     {% if can_manage_stock %}
     <div class="mt-6 max-w-xl">
         <section class="card overflow-hidden">
             <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Add stock</h2></div>
-            <form action="{% url 'record_stock_in' %}" method="post" class="space-y-4 p-5">
+            <form action="{% url 'record_stock_in' %}" method="post" class="space-y-4 p-5" data-ajax data-ajax-reset>
                 {% csrf_token %}
                 <div class="relative" id="stock-picker">
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Product</span>
@@ -65,7 +65,7 @@
                     <div id="stock-item-list" class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-md bg-surface shadow-card"></div>
                     <p id="stock-item-hint" class="mt-1 text-[11px] text-muted">Pick from the list, or type a new name.</p>
                 </div>
-                {{ stock_products|json_script:"stock-products" }}
+                <div id="dash-stock-products" data-live>{{ stock_products|json_script:"stock-products" }}</div>
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Qty</span><input type="number" name="quantity" min="0.001" step="0.001" value="1" required class="field"></label>
                     <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Sold as</span>
@@ -88,7 +88,7 @@
                     <div id="stock-category-list" class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-y-auto rounded-md bg-surface shadow-card"></div>
                     <p id="stock-category-hint" class="mt-1 text-[11px] text-muted">Pick from the list, or type a new category.</p>
                 </div>
-                {{ stock_categories|json_script:"stock-categories" }}
+                <div id="dash-stock-categories" data-live>{{ stock_categories|json_script:"stock-categories" }}</div>
                 <button type="submit" class="btn-primary w-full" {% if not sub_active %}disabled{% endif %}>Add stock</button>
             </form>
         </section>
@@ -124,7 +124,7 @@
                     <th class="px-3 py-3 font-medium sm:px-5">Stock</th>
                     {% if can_edit_items %}<th class="px-3 py-3 sm:px-5"></th>{% endif %}
                 </tr></thead>
-                <tbody>
+                <tbody id="dash-inventory" data-live>
                     {% regroup items by category as item_groups %}
                     {% for group in item_groups %}
                     <tr class="bg-bg">
@@ -160,7 +160,12 @@
     var idEl = opts.idId ? document.getElementById(opts.idId) : null;
     if (!dataEl || !nameEl || !listEl || !wrap) return;
     var rows = [];
-    try { rows = JSON.parse(dataEl.textContent); } catch (e) { rows = []; }
+    function load() {
+      var el = document.getElementById(opts.dataId);
+      try { rows = JSON.parse(el ? el.textContent : "[]"); } catch (e) { rows = []; }
+    }
+    load();
+    document.addEventListener("csm:live-updated", load);
 
     function render(query) {
       var q = (query || "").trim().toLowerCase();

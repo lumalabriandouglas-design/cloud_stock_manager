@@ -2,6 +2,7 @@
 {% load shop %}
 {% block title %}{{ debt.party_name }} – Debts{% endblock %}
 {% block content %}
+<div id="debt-detail" data-live>
 <a href="{% url 'debts' %}?tab={{ debt.direction }}" class="text-sm text-muted hover:text-primary">← {{ tab_label }}</a>
 <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -20,7 +21,7 @@
 </div>
 
 {% if can_manage_stock and not debt.is_settled %}
-<form method="post" action="{% url 'debt_pay' debt.id %}" class="card mt-6 p-5 sm:p-6">{% csrf_token %}
+<form method="post" action="{% url 'debt_pay' debt.id %}" class="card mt-6 p-5 sm:p-6" data-ajax data-ajax-reset>{% csrf_token %}
     <h2 class="text-lg font-semibold">Record a payment</h2>
     <p class="text-sm text-muted">{% if debt.direction == 'owed_to_shop' %}Money the customer paid in.{% else %}Money the shop paid out.{% endif %} Part payments are fine.</p>
     <div class="mt-4 grid gap-4 sm:grid-cols-3">
@@ -48,4 +49,5 @@
     <button class="text-sm text-danger hover:underline">Delete debt</button>
 </form>
 {% endif %}
+</div>
 {% endblock %}

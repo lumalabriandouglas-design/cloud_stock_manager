@@ -4,7 +4,7 @@
 {% block content %}
 <div>
     <h1 class="text-3xl font-semibold tracking-tight">Sell</h1>
-    <p class="mt-1 text-sm text-muted">Today you have sold UGX {{ today_total|ugx }}</p>
+    <p id="sell-today-total" data-live class="mt-1 text-sm text-muted">Today you have sold UGX {{ today_total|ugx }}</p>
 </div>
 <div class="mt-6 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
     <section class="card p-5 sm:p-6">
@@ -12,10 +12,10 @@
         {% if not can_manage_stock %}
         <p class="text-sm text-muted">You can look, but you cannot record a sale.</p>
         {% else %}
-        <form action="{% url 'record_sale' %}" method="post" class="space-y-3">
+        <form action="{% url 'record_sale' %}" method="post" class="space-y-3" data-ajax>
             {% csrf_token %}
             <label class="block"><span class="mb-1.5 block text-xs font-medium text-muted">Product</span>
-                <select name="item_id" required class="field">
+                <select name="item_id" required class="field" id="sell-item" data-live>
                     <option value="">Choose…</option>
                     {% for item in items %}
                     <option value="{{ item.id }}">{{ item.name }} ({{ item.stock_label }})</option>
@@ -32,7 +32,7 @@
         </form>
         {% endif %}
     </section>
-    <section class="card overflow-hidden">
+    <section class="card overflow-hidden" id="sell-today" data-live>
         <div class="border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Today</h2></div>
         {% if today_sales %}
         <ul class="divide-y divide-line">{% for s in today_sales %}
@@ -42,7 +42,7 @@
                     <span>UGX {{ s.line_total|ugx }}</span>
                     {% if can_manage_stock %}
                     <a href="{% url 'edit_sale' s.id %}" class="text-xs font-medium text-primary">Edit</a>
-                    <form action="{% url 'delete_sale' s.id %}" method="post" onsubmit="return confirm('Remove this sale and put the stock back?');">
+                    <form action="{% url 'delete_sale' s.id %}" method="post" data-ajax onsubmit="return confirm('Remove this sale and put the stock back?');">
                         {% csrf_token %}
                         <button type="submit" class="text-xs font-medium text-danger">Remove</button>
                     </form>
