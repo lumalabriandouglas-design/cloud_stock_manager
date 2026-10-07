@@ -661,7 +661,9 @@ def sales_report(request):
     sales = Sale.objects.filter(company=company, sales_date__gte=since).select_related("item").order_by("-sales_date")
     total_revenue = sum(s.line_total for s in sales)
     total_cost = sum(s.estimated_cost for s in sales)
+    from .debts import debt_totals
     return render(request, "inventory/sales_report.html", {
+        "debt_totals": debt_totals(company),
         "company": company, "sales": sales, "days": days,
         "total_revenue": total_revenue, "total_cost": total_cost,
         "total_profit": total_revenue - total_cost, "total_qty": sum(s.quantity_sold for s in sales),

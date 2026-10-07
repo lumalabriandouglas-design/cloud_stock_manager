@@ -1,0 +1,51 @@
+{% extends "inventory/base.html" %}
+{% load shop %}
+{% block title %}{{ debt.party_name }} – Debts{% endblock %}
+{% block content %}
+<a href="{% url 'debts' %}?tab={{ debt.direction }}" class="text-sm text-muted hover:text-primary">← {{ tab_label }}</a>
+<div class="mt-2 flex flex-wrap items-start justify-between gap-3">
+    <div>
+        <h1 class="text-3xl font-semibold tracking-tight">{{ debt.party_name }}</h1>
+        <p class="mt-1 text-sm text-muted">{{ tab_label }}{% if debt.party_phone %} · {{ debt.party_phone }}{% endif %}{% if debt.notes %} · {{ debt.notes }}{% endif %}</p>
+    </div>
+    {% if debt.is_settled %}<span class="rounded-md bg-good-bg px-3 py-1.5 text-sm font-semibold text-primary">Settled {{ debt.settled_at|date:"d M Y" }}</span>
+    {% elif debt.is_overdue %}<span class="rounded-md bg-danger-bg px-3 py-1.5 text-sm font-semibold text-danger">Overdue · due {{ debt.due_date|date:"d M Y" }}</span>
+    {% elif debt.due_date %}<span class="rounded-md bg-surface px-3 py-1.5 text-sm text-muted shadow-card">Due {{ debt.due_date|date:"d M Y" }}</span>{% endif %}
+</div>
+
+<div class="mt-6 grid grid-cols-3 gap-3">
+    <div class="card min-w-0 p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Amount</p><p class="mt-1 font-serif text-lg font-semibold sm:text-2xl">{{ debt.amount|ugx }}</p></div>
+    <div class="card min-w-0 p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Paid</p><p class="mt-1 font-serif text-lg font-semibold sm:text-2xl">{{ debt.paid|ugx }}</p></div>
+    <div class="card min-w-0 p-4 sm:p-5"><p class="text-xs uppercase tracking-wide text-muted">Remaining</p><p class="mt-1 font-serif text-lg font-semibold sm:text-2xl {% if debt.remaining %}text-accent{% else %}text-primary{% endif %}">{{ debt.remaining|ugx }}</p></div>
+</div>
+
+{% if can_manage_stock and not debt.is_settled %}
+<form method="post" action="{% url 'debt_pay' debt.id %}" class="card mt-6 p-5 sm:p-6">{% csrf_token %}
+    <h2 class="text-lg font-semibold">Record a payment</h2>
+    <p class="text-sm text-muted">{% if debt.direction == 'owed_to_shop' %}Money the customer paid in.{% else %}Money the shop paid out.{% endif %} Part payments are fine.</p>
+    <div class="mt-4 grid gap-4 sm:grid-cols-3">
+        <label class="block text-sm"><span class="mb-1 block font-medium">Amount (UGX)</span><input name="amount" required inputmode="decimal" class="field" placeholder="{{ debt.remaining|ugx }}"></label>
+        <label class="block text-sm"><span class="mb-1 block font-medium">Date</span><input type="date" name="paid_on" value="{{ today|date:'Y-m-d' }}" class="field"></label>
+        <label class="block text-sm"><span class="mb-1 block font-medium">Note <span class="text-muted">(optional)</span></span><input name="note" maxlength="255" class="field" placeholder="MoMo, cash…"></label>
+    </div>
+    <button class="btn-primary mt-4">Save payment</button>
+</form>
+{% endif %}
+
+<section class="card mt-6 overflow-hidden">
+    <div class="flex justify-between border-b border-line px-5 py-4"><h2 class="text-lg font-semibold">Payments</h2><span class="text-sm text-muted">{{ payments|length }}</span></div>
+    <ul class="divide-y divide-line">
+    {% for p in payments %}
+        <li class="flex justify-between px-5 py-3 text-sm"><span>{{ p.paid_on|date:"d M Y" }}{% if p.note %} · <span class="text-muted">{{ p.note }}</span>{% endif %}</span><span class="font-medium">{{ p.amount|ugx }}</span></li>
+    {% empty %}
+        <li class="px-5 py-8 text-center text-sm text-muted">No payments yet.</li>
+    {% endfor %}
+    </ul>
+</section>
+
+{% if is_owner %}
+<form method="post" action="{% url 'debt_delete' debt.id %}" class="mt-6" onsubmit="return confirm('Delete this debt and its payments?')">{% csrf_token %}
+    <button class="text-sm text-danger hover:underline">Delete debt</button>
+</form>
+{% endif %}
+{% endblock %}

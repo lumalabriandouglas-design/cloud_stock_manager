@@ -1,0 +1,27 @@
+{% extends "inventory/base.html" %}
+{% block title %}Add debt – {{ company.name }}{% endblock %}
+{% block content %}
+<a href="{% url 'debts' %}?tab={{ form.direction }}" class="text-sm text-muted hover:text-primary">← Debts</a>
+<h1 class="mt-2 text-3xl font-semibold tracking-tight">Add debt</h1>
+<form method="post" class="card mt-6 max-w-xl space-y-4 p-5 sm:p-6">{% csrf_token %}
+    <fieldset>
+        <legend class="mb-2 text-sm font-medium">Which way?</legend>
+        <div class="grid grid-cols-2 gap-2">
+            {% for key, label in tabs.items %}
+            <label class="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-bg px-3 py-3 text-sm has-[:checked]:border-primary has-[:checked]:bg-good-bg">
+                <input type="radio" name="direction" value="{{ key }}" {% if form.direction == key %}checked{% endif %} class="accent-primary">
+                <span><span class="font-medium">{{ label }}</span><br><span class="text-xs text-muted">{% if key == 'owed_to_shop' %}A customer will pay later{% else %}We'll pay a supplier later{% endif %}</span></span>
+            </label>
+            {% endfor %}
+        </div>
+    </fieldset>
+    <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm"><span class="mb-1 block font-medium">Name</span><input name="party_name" value="{{ form.party_name }}" required maxlength="120" class="field" placeholder="e.g. Mama Grace"></label>
+        <label class="block text-sm"><span class="mb-1 block font-medium">Phone <span class="text-muted">(optional)</span></span><input name="party_phone" value="{{ form.party_phone }}" maxlength="30" class="field" placeholder="07…" inputmode="tel"></label>
+        <label class="block text-sm"><span class="mb-1 block font-medium">Amount (UGX)</span><input name="amount" value="{{ form.amount }}" required inputmode="decimal" class="field" placeholder="50000"></label>
+        <label class="block text-sm"><span class="mb-1 block font-medium">Due date <span class="text-muted">(optional)</span></span><input type="date" name="due_date" value="{{ form.due_date }}" class="field"></label>
+    </div>
+    <label class="block text-sm"><span class="mb-1 block font-medium">Notes <span class="text-muted">(optional)</span></span><input name="notes" value="{{ form.notes }}" maxlength="255" class="field" placeholder="What it's for, e.g. 2 bags of sugar"></label>
+    <div class="flex gap-3 pt-2"><button class="btn-primary">Save debt</button><a href="{% url 'debts' %}?tab={{ form.direction }}" class="inline-flex items-center px-3 text-sm text-muted">Cancel</a></div>
+</form>
+{% endblock %}

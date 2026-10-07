@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import features
+from . import debts
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -40,5 +41,10 @@ urlpatterns = [
     path("sales/<int:sale_id>/edit/", views.edit_sale, name="edit_sale"),
     path("sales/<int:sale_id>/delete/", views.delete_sale, name="delete_sale"),
     path("record-stock-in/", views.record_stock_in, name="record_stock_in"),
+    path("debts/", debts.debt_list, name="debts"),
+    path("debts/add/", debts.debt_add, name="debt_add"),
+    path("debts/<int:debt_id>/", debts.debt_detail, name="debt_detail"),
+    path("debts/<int:debt_id>/pay/", debts.debt_pay, name="debt_pay"),
+    path("debts/<int:debt_id>/delete/", debts.debt_delete, name="debt_delete"),
     path("scan-ledger/", views.scan_ledger, name="scan_ledger"),
 ]
