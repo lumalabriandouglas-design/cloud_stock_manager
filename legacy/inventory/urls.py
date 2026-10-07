@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 from . import features
+from . import debts
+from .ajax import ajax_json
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
@@ -23,8 +25,8 @@ urlpatterns = [
 
     path("team/", views.manage_team, name="manage_team"),
     path("categories/", views.manage_categories, name="manage_categories"),
-    path("items/<int:item_id>/edit/", views.edit_item, name="edit_item"),
-    path("items/<int:item_id>/delete/", features.delete_item, name="delete_item"),
+    path("items/<int:item_id>/edit/", ajax_json(views.edit_item), name="edit_item"),
+    path("items/<int:item_id>/delete/", ajax_json(features.delete_item), name="delete_item"),
     path("shop/rename/", features.rename_shop, name="rename_shop"),
     path("reports/sales/", views.sales_report, name="sales_report"),
 
@@ -36,9 +38,14 @@ urlpatterns = [
     path("export/inventory/", views.export_inventory_csv, name="export_inventory_csv"),
     path("export/sales/", views.export_sales_csv, name="export_sales_csv"),
 
-    path("record-sale/", views.record_sale, name="record_sale"),
-    path("sales/<int:sale_id>/edit/", views.edit_sale, name="edit_sale"),
-    path("sales/<int:sale_id>/delete/", views.delete_sale, name="delete_sale"),
-    path("record-stock-in/", views.record_stock_in, name="record_stock_in"),
+    path("record-sale/", ajax_json(views.record_sale), name="record_sale"),
+    path("sales/<int:sale_id>/edit/", ajax_json(views.edit_sale), name="edit_sale"),
+    path("sales/<int:sale_id>/delete/", ajax_json(views.delete_sale), name="delete_sale"),
+    path("record-stock-in/", ajax_json(views.record_stock_in), name="record_stock_in"),
+    path("debts/", debts.debt_list, name="debts"),
+    path("debts/add/", debts.debt_add, name="debt_add"),
+    path("debts/<int:debt_id>/", debts.debt_detail, name="debt_detail"),
+    path("debts/<int:debt_id>/pay/", ajax_json(debts.debt_pay), name="debt_pay"),
+    path("debts/<int:debt_id>/delete/", debts.debt_delete, name="debt_delete"),
     path("scan-ledger/", views.scan_ledger, name="scan_ledger"),
 ]

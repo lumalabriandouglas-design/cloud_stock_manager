@@ -310,3 +310,74 @@ class PasswordResetCode(models.Model):
     expires_at = models.DateTimeField()
     used = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Debt(models.Model):
+    """Money owed to the shop by a customer, or owed by the shop to a supplier."""
+
+    OWED_TO_SHOP = "owed_to_shop"
+    SHOP_OWES = "shop_owes"
+    DIRECTION_CHOICES = [
+        (OWED_TO_SHOP, "Owed to shop"),
+        (SHOP_OWES, "Shop owes"),
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="debts")
+    direction = models.CharField(max_length=20, choices=DIRECTION_CHOICES)
+    party_name = models.CharField(max_length=120)
+    party_phone = models.CharField(max_length=30, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    notes = models.CharField(max_length=255, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["settled_at", "due_date", "-created_at"]
+        indexes = [models.Index(fields=["company", "direction", "settled_at"])]
+
+    def __str__(self):
+        return f"{self.party_name} – {self.get_direction_display()} {self.amount}"
+
+    @property
+    def paid(self):
+        if hasattr(self, "_paid"):
+            return self._paid
+        total = self.payments.aggregate(t=models.Sum("amount"))["t"]
+        return total or Decimal("0")
+
+    @property
+    def remaining(self):
+        return max(self.amount - self.paid, Decimal("0"))
+
+    @property
+    def is_settled(self):
+        return self.settled_at is not None
+
+    @property
+    def is_overdue(self):
+        return (not self.is_settled) and self.due_date is not None and self.due_date < timezone.localdate()
+
+    def refresh_settled(self, save=True):
+        """Mark settled when the balance reaches zero (or reopen if a payment was removed)."""
+        if hasattr(self, "_paid"):
+            del self._paid
+        if self.remaining <= 0 and not self.settled_at:
+            self.settled_at = timezone.now()
+        elif self.remaining > 0 and self.settled_at:
+            self.settled_at = None
+        if save:
+            self.save(update_fields=["settled_at"])
+
+
+class DebtPayment(models.Model):
+    debt = models.ForeignKey(Debt, on_delete=models.CASCADE, related_name="payments")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    paid_on = models.DateField(default=timezone.localdate)
+    note = models.CharField(max_length=255, blank=True)
+    recorded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-paid_on", "-created_at"]

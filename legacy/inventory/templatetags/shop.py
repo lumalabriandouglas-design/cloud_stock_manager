@@ -12,3 +12,11 @@ def ugx(value):
     except (InvalidOperation, TypeError, ValueError):
         amount = Decimal("0")
     return f"{int(amount):,}"
+
+
+@register.filter
+def get_item(mapping, key):
+    try:
+        return mapping.get(key)
+    except AttributeError:
+        return None

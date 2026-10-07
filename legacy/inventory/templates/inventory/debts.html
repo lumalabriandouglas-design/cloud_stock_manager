@@ -1,0 +1,53 @@
+{% extends "inventory/base.html" %}
+{% load shop %}
+{% block title %}Debts – {{ company.name }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3">
+    <h1 class="text-3xl font-semibold tracking-tight">Debts</h1>
+    {% if can_manage_stock %}<a href="{% url 'debt_add' %}?tab={{ tab }}" class="btn-primary">Add debt</a>{% endif %}
+</div>
+<p class="mt-1 text-sm text-muted">Who owes the shop, and who the shop owes.</p>
+
+<div class="mt-6 grid grid-cols-2 gap-3">
+    {% for key, label in tabs.items %}{% with t=totals|get_item:key %}
+    <a href="?tab={{ key }}" class="card min-w-0 overflow-hidden p-4 sm:p-5 {% if tab == key %}ring-2 ring-primary{% endif %}">
+        <p class="text-xs uppercase tracking-wide text-muted">{{ label }}</p>
+        <p class="mt-1 break-words font-serif text-lg font-semibold leading-tight sm:text-2xl {% if key == 'shop_owes' %}text-accent{% else %}text-primary{% endif %}">UGX {{ t.unpaid|ugx }}</p>
+        <p class="mt-1 text-xs text-muted">{{ t.open }} open{% if t.overdue %} · <span class="font-semibold text-danger">{{ t.overdue }} overdue</span>{% endif %}</p>
+    </a>
+    {% endwith %}{% endfor %}
+</div>
+
+<div class="mt-6 flex items-center justify-between border-b border-line">
+    <nav class="flex gap-1">
+        {% for key, label in tabs.items %}
+        <a href="?tab={{ key }}" class="nav-tab {% if tab == key %}nav-tab-on{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </nav>
+    <a href="?tab={{ tab }}{% if not show_settled %}&settled=1{% endif %}" class="pb-2 text-xs text-muted hover:text-primary">{% if show_settled %}Hide settled{% else %}Show settled{% endif %}</a>
+</div>
+
+<section class="card mt-4 overflow-hidden">
+    <ul class="divide-y divide-line">
+    {% for d in debts %}
+        <li>
+            <a href="{% url 'debt_detail' d.id %}" class="flex items-center justify-between gap-3 px-5 py-4 hover:bg-bg {% if d.is_overdue %}border-l-4 border-danger bg-danger-bg/40{% endif %}">
+                <div class="min-w-0">
+                    <p class="truncate font-medium">{{ d.party_name }}{% if d.is_settled %} <span class="ml-1 rounded bg-good-bg px-1.5 py-0.5 text-xs text-primary">Settled</span>{% endif %}</p>
+                    <p class="truncate text-xs text-muted">
+                        {% if d.due_date %}{% if d.is_overdue %}<span class="font-semibold text-danger">Overdue · due {{ d.due_date|date:"d M Y" }}</span>{% else %}Due {{ d.due_date|date:"d M Y" }}{% endif %}{% else %}No due date{% endif %}
+                        {% if d.party_phone %} · {{ d.party_phone }}{% endif %}{% if d.notes %} · {{ d.notes }}{% endif %}
+                    </p>
+                </div>
+                <div class="shrink-0 text-right">
+                    <p class="font-serif text-lg font-semibold">{{ d.remaining|ugx }}</p>
+                    <p class="text-xs text-muted">{% if d.paid %}paid {{ d.paid|ugx }} of {{ d.amount|ugx }}{% else %}of {{ d.amount|ugx }}{% endif %}</p>
+                </div>
+            </a>
+        </li>
+    {% empty %}
+        <li class="px-5 py-10 text-center text-sm text-muted">Nothing {{ tab_label|lower }} right now.</li>
+    {% endfor %}
+    </ul>
+</section>
+{% endblock %}
