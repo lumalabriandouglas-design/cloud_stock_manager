@@ -84,5 +84,5 @@ Open the public Railway URL. Register a business or login as superuser and use P
 ## Notes
 
 - **Media files** (ledger photos) are stored on the local disk. On Railway the filesystem is ephemeral — for production AI scans you should later move media to S3/Cloudinary. For MVP it is acceptable.
-- **Email**: set `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` when you want real low-stock emails.
+- **Email**: set `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` when you want real low-stock emails. The same settings send subscription reminder emails. Schedule `python manage.py send_subscription_reminders` daily at 08:00 Africa/Kampala (`0 5 * * *`) as its own Railway cron service. See `DEPLOY.md`.
 - Locally the app still uses SQLite if `DATABASE_URL` is not set.

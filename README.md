@@ -30,5 +30,8 @@ Variables:
 | `GOOGLE_CLIENT_ID` | Google OAuth (optional) |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth (optional) |
 | `GEMINI_API_KEY` | Ledger scanner (optional) |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP for low-stock mail and subscription reminders |
 
 Google redirect URI: `https://your-app.up.railway.app/accounts/google/callback/`
+
+Subscription reminders are a separate daily Railway cron (`python manage.py send_subscription_reminders`, `0 5 * * *`). See [DEPLOY.md](DEPLOY.md). Do not put that command in the web start command.

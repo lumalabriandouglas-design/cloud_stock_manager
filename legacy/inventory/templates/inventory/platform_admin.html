@@ -104,7 +104,7 @@
                     <tr class="text-left text-xs text-slate-400 border-b border-slate-100">
                         <th class="px-4 sm:px-5 py-3 font-medium">Company</th>
                         <th class="px-4 sm:px-5 py-3 font-medium">Status</th>
-                        <th class="px-4 sm:px-5 py-3 font-medium hidden sm:table-cell">Until</th>
+                        <th class="px-4 sm:px-5 py-3 font-medium">Due date</th>
                         <th class="px-4 sm:px-5 py-3 font-medium hidden md:table-cell">Users</th>
                         <th class="px-4 sm:px-5 py-3 font-medium">Actions</th>
                     </tr>
@@ -132,14 +132,21 @@
                             <span class="text-xs text-slate-400">No sub</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 sm:px-5 py-3 text-xs text-slate-500 hidden sm:table-cell">
-                            {% if row.sub %}
-                                {% if row.sub.status == 'trial' and row.sub.trial_ends_at %}
-                                    {{ row.sub.trial_ends_at|date:"d M Y" }}
-                                {% elif row.sub.current_period_end %}
-                                    {{ row.sub.current_period_end|date:"d M Y" }}
-                                {% else %}—{% endif %}
-                            {% else %}—{% endif %}
+                        <td class="px-4 sm:px-5 py-3 text-xs whitespace-nowrap">
+                            {% if row.due_at %}
+                            <span class="{% if row.due_state == 'overdue' %}text-rose-600 font-medium{% elif row.due_state == 'today' or row.due_state == 'soon' %}text-amber-700 font-medium{% else %}text-slate-600{% endif %}">
+                                {{ row.due_at|date:"d M Y" }}
+                            </span>
+                            {% if row.due_state == 'overdue' %}
+                            <span class="text-[10px] text-rose-500 block mt-0.5">Overdue</span>
+                            {% elif row.due_state == 'today' %}
+                            <span class="text-[10px] text-amber-600 block mt-0.5">Due today</span>
+                            {% elif row.due_state == 'soon' %}
+                            <span class="text-[10px] text-amber-600 block mt-0.5">Due soon</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="text-slate-400">No due date</span>
+                            {% endif %}
                         </td>
                         <td class="px-4 sm:px-5 py-3 text-slate-500 hidden md:table-cell">{{ row.users }}</td>
                         <td class="px-4 sm:px-5 py-3">

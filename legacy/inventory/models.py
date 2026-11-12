@@ -41,12 +41,17 @@ class Subscription(models.Model):
 
     PLAN_AMOUNT_UGX = 15000
     TRIAL_DAYS = 7
+    # Advance reminder goes out once while the due date is this many calendar
+    # days away (Africa/Kampala). A second, separate reminder goes out on the due date.
+    REMINDER_LEAD_DAYS = 3
 
     company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="sub")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_TRIAL)
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
     last_payment_at = models.DateTimeField(null=True, blank=True)
+    reminded_upcoming_for = models.DateTimeField(null=True, blank=True)
+    reminded_due_for = models.DateTimeField(null=True, blank=True)
     payment_phone = models.CharField(max_length=20, blank=True)
     payment_tx_id = models.CharField(max_length=100, blank=True)
     payment_note = models.CharField(max_length=255, blank=True)
@@ -56,6 +61,39 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.company.name} – {self.status}"
+
+    @property
+    def due_at(self):
+        """When this trial or subscription is due to expire or be renewed.
+
+        Trials use trial_ends_at. A paid period uses current_period_end.
+        A pending, past-due, or suspended shop that has never been given a
+        paid period is still due when the trial ends. An active shop with
+        neither date has no due date (access does not expire on a date).
+        """
+        if self.status == self.STATUS_TRIAL:
+            return self.trial_ends_at
+        if self.current_period_end:
+            return self.current_period_end
+        if self.status in (self.STATUS_PENDING, self.STATUS_PAST_DUE, self.STATUS_SUSPENDED):
+            return self.trial_ends_at
+        return None
+
+    @property
+    def due_state(self):
+        """none, overdue, today, soon, or ok. Dates are Africa/Kampala calendar days."""
+        due = self.due_at
+        if not due:
+            return "none"
+        now = timezone.now()
+        if due < now:
+            return "overdue"
+        days = (timezone.localtime(due).date() - timezone.localdate()).days
+        if days <= 0:
+            return "today"
+        if days <= self.REMINDER_LEAD_DAYS:
+            return "soon"
+        return "ok"
 
     @classmethod
     def start_trial(cls, company):
