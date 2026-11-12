@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 from decimal import Decimal
 
@@ -252,3 +253,241 @@ class NoReloadSaveTests(TestCase):
     def test_pages_have_live_regions(self):
         self.assertContains(self.client.get(reverse("sell")), 'id="sell-today" data-live')
         self.assertContains(self.client.get(reverse("dashboard")), 'id="dash-inventory" data-live')
+
+
+def local_day(when):
+    from django.utils.dateformat import format as date_format
+    return date_format(timezone.localtime(when), "d M Y")
+
+
+class SubscriptionDueTests(TestCase):
+    def test_trial_is_due_at_trial_end(self):
+        company, _ = make_shop("Trial Shop", "trial_owner")
+        sub = company.sub
+        self.assertEqual(sub.due_at, sub.trial_ends_at)
+        self.assertEqual(sub.due_state, "ok")
+
+    def test_paid_period_replaces_trial_end(self):
+        company, _ = make_shop("Paid Shop", "paid_owner")
+        sub = company.sub
+        sub.activate_for_month()
+        sub.refresh_from_db()
+        self.assertEqual(sub.due_at, sub.current_period_end)
+        self.assertGreater(sub.current_period_end, sub.trial_ends_at)
+
+    def test_pending_without_paid_period_keeps_trial_end(self):
+        company, _ = make_shop("Pending Shop", "pending_owner")
+        sub = company.sub
+        sub.claim_payment(phone="0700", tx_id="abc")
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, Subscription.STATUS_PENDING)
+        self.assertEqual(sub.due_at, sub.trial_ends_at)
+
+    def test_active_without_dates_has_no_due_date(self):
+        company, _ = make_shop("Open Shop", "open_owner")
+        sub = company.sub
+        sub.status = Subscription.STATUS_ACTIVE
+        sub.trial_ends_at = None
+        sub.current_period_end = None
+        sub.save()
+        self.assertIsNone(sub.due_at)
+        self.assertEqual(sub.due_state, "none")
+
+
+class PlatformDueDateTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root", "root@x.test", "pw-12345!")
+        self.client.force_login(self.admin)
+        self.trial, _ = make_shop("Kampala Grocers", "kg_owner")
+        self.trial.sub.trial_ends_at = timezone.now() + timedelta(days=2)
+        self.trial.sub.save()
+        self.overdue, _ = make_shop("Old Duka", "old_owner")
+        self.overdue.sub.status = Subscription.STATUS_ACTIVE
+        self.overdue.sub.current_period_end = timezone.now() - timedelta(days=1)
+        self.overdue.sub.save()
+        self.blank = Company.objects.create(name="No Plan")
+        self.today_shop, _ = make_shop("Closes Today", "today_owner")
+        later_today = timezone.now() + timedelta(minutes=30)
+        if timezone.localtime(later_today).date() != timezone.localdate():
+            later_today = timezone.now() + timedelta(seconds=30)
+        self.today_shop.sub.trial_ends_at = later_today
+        self.today_shop.sub.save()
+
+    def test_each_company_shows_its_due_date(self):
+        response = self.client.get(reverse("platform_admin"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Due date")
+        self.assertContains(response, "Kampala Grocers")
+        self.assertContains(response, local_day(self.trial.sub.trial_ends_at))
+        self.assertContains(response, "Due soon")
+        self.assertContains(response, local_day(self.overdue.sub.current_period_end))
+        self.assertContains(response, "Overdue")
+        self.assertContains(response, "Due today")
+        self.assertContains(response, "No due date")
+        self.assertContains(response, "No Plan")
+
+    def test_kampala_date_not_utc_date(self):
+        from datetime import datetime, timezone as dt_timezone
+        company, _ = make_shop("Timezone Shop", "tz_owner")
+        # 22:00 UTC is 01:00 the next morning in Africa/Kampala.
+        company.sub.trial_ends_at = datetime(2026, 12, 1, 22, 0, tzinfo=dt_timezone.utc)
+        company.sub.save()
+        response = self.client.get(reverse("platform_admin"))
+        self.assertContains(response, "02 Dec 2026")
+        self.assertNotContains(response, "01 Dec 2026")
+
+    def test_staff_cannot_open_platform(self):
+        _, owner = make_shop("Staff Shop", "staff_shop_owner")
+        self.client.force_login(owner)
+        self.assertEqual(self.client.get(reverse("platform_admin")).status_code, 302)
+
+
+class SubscriptionReminderTests(TestCase):
+    def setUp(self):
+        from django.test.utils import override_settings
+        self.email_override = override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+        self.email_override.enable()
+        self._old_host = os.environ.get("EMAIL_HOST")
+        os.environ["EMAIL_HOST"] = "smtp.test"
+        self.company, self.owner = make_shop("Acme Duka", "acme_owner")
+        self.owner.email = "owner@acme.test"
+        self.owner.save()
+        self.sub = self.company.sub
+
+    def tearDown(self):
+        self.email_override.disable()
+        if self._old_host is None:
+            os.environ.pop("EMAIL_HOST", None)
+        else:
+            os.environ["EMAIL_HOST"] = self._old_host
+
+    def _due_in(self, days):
+        self.sub.trial_ends_at = timezone.now() + timedelta(days=days)
+        self.sub.status = Subscription.STATUS_TRIAL
+        self.sub.save()
+
+    def test_advance_email_once_then_due_date_email_once(self):
+        from django.core import mail
+        from django.core.management import call_command
+        self._due_in(3)
+        call_command("send_subscription_reminders")
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["owner@acme.test"])
+        self.assertIn("Acme Duka", message.subject)
+        self.assertIn("free trial", message.body)
+        self.assertIn(local_day(self.sub.trial_ends_at), message.body)
+        self.assertIn("ends on", message.body)
+        self.assertNotIn("15,000", message.body)
+        self.assertNotIn("0781", message.body)
+        call_command("send_subscription_reminders")
+        self.assertEqual(len(mail.outbox), 1)
+        self.sub.refresh_from_db()
+        self.assertIsNotNone(self.sub.reminded_upcoming_for)
+
+        self._due_in(0)
+        call_command("send_subscription_reminders")
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn("ends today", mail.outbox[1].subject)
+        self.assertIn("Acme Duka", mail.outbox[1].body)
+        call_command("send_subscription_reminders")
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_outside_the_window_and_already_overdue_are_quiet(self):
+        from django.core import mail
+        from inventory.reminders import send_subscription_reminders
+        self._due_in(4)
+        send_subscription_reminders()
+        self._due_in(-2)
+        send_subscription_reminders()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_skips_missing_email_and_staff_then_sends_when_owner_email_exists(self):
+        from django.core import mail
+        from inventory.reminders import send_subscription_reminders
+        self.owner.email = ""
+        self.owner.save()
+        User.objects.create_user("acme_staff", "staff@acme.test", "pw-12345!")
+        UserProfile.objects.create(user=User.objects.get(username="acme_staff"), company=self.company, role=UserProfile.ROLE_STAFF)
+        self._due_in(1)
+        result = send_subscription_reminders()
+        self.assertEqual(result["skipped_no_email"], 1)
+        self.assertEqual(len(mail.outbox), 0)
+        self.sub.refresh_from_db()
+        self.assertIsNone(self.sub.reminded_upcoming_for)
+        self.owner.email = "owner@acme.test"
+        self.owner.save()
+        send_subscription_reminders()
+        self.assertEqual(mail.outbox[0].to, ["owner@acme.test"])
+
+    def test_two_owners_one_email_and_suspended_is_skipped(self):
+        from django.core import mail
+        from inventory.reminders import send_subscription_reminders
+        second = User.objects.create_user("acme_owner_2", "second@acme.test", "pw-12345!")
+        UserProfile.objects.create(user=second, company=self.company, role=UserProfile.ROLE_OWNER)
+        self._due_in(2)
+        send_subscription_reminders()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertCountEqual(mail.outbox[0].to, ["owner@acme.test", "second@acme.test"])
+        mail.outbox.clear()
+        suspended, user = make_shop("Paused Shop", "paused_owner")
+        user.email = "paused@x.test"
+        user.save()
+        suspended.sub.status = Subscription.STATUS_SUSPENDED
+        suspended.sub.current_period_end = timezone.now() + timedelta(days=1)
+        suspended.sub.save()
+        self.sub.status = Subscription.STATUS_ACTIVE
+        self.sub.current_period_end = timezone.now() + timedelta(days=20)
+        self.sub.save()
+        send_subscription_reminders()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_new_period_can_be_reminded_again(self):
+        from django.core import mail
+        from inventory.reminders import send_subscription_reminders
+        self.sub.status = Subscription.STATUS_ACTIVE
+        self.sub.current_period_end = timezone.now() + timedelta(days=2)
+        self.sub.save()
+        send_subscription_reminders()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("subscription", mail.outbox[0].body)
+        self.sub.current_period_end = timezone.now() + timedelta(days=2, hours=1)
+        self.sub.save()
+        send_subscription_reminders()
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_failed_send_is_not_recorded(self):
+        from unittest.mock import patch
+        from inventory.reminders import send_subscription_reminders
+        self._due_in(2)
+        with patch("inventory.reminders.send_mail", side_effect=OSError("smtp down")):
+            result = send_subscription_reminders()
+        self.assertEqual(result["failed"], 1)
+        self.sub.refresh_from_db()
+        self.assertIsNone(self.sub.reminded_upcoming_for)
+
+    def test_without_email_host_nothing_is_marked(self):
+        from django.core.management.base import CommandError
+        from django.core.management import call_command
+        from inventory.reminders import send_subscription_reminders
+        os.environ.pop("EMAIL_HOST", None)
+        self._due_in(1)
+        result = send_subscription_reminders()
+        self.assertTrue(result["disabled"])
+        self.sub.refresh_from_db()
+        self.assertIsNone(self.sub.reminded_upcoming_for)
+        with self.assertRaises(CommandError):
+            call_command("send_subscription_reminders")
+
+    def test_dry_run_does_not_send_or_record(self):
+        from io import StringIO
+        from django.core import mail
+        from django.core.management import call_command
+        os.environ.pop("EMAIL_HOST", None)
+        self._due_in(1)
+        out = StringIO()
+        call_command("send_subscription_reminders", "--dry-run", stdout=out)
+        self.assertIn("owner@acme.test", out.getvalue())
+        self.assertEqual(len(mail.outbox), 0)
+        self.sub.refresh_from_db()
+        self.assertIsNone(self.sub.reminded_upcoming_for)

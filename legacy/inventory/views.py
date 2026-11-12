@@ -897,7 +897,7 @@ def scan_ledger(request):
 @login_required
 @user_passes_test(is_superuser)
 def platform_admin(request):
-    companies = Company.objects.all().order_by("-created_at")
+    companies = Company.objects.select_related("sub").order_by("-created_at")
     pending_subs = Subscription.objects.filter(status=Subscription.STATUS_PENDING).select_related("company").order_by("-payment_claimed_at")
     all_subs = list(Subscription.objects.select_related("company"))
     stats = {
@@ -906,7 +906,17 @@ def platform_admin(request):
         "trial": sum(1 for s in all_subs if s.status == Subscription.STATUS_TRIAL and s.is_active),
         "pending": pending_subs.count(),
     }
-    company_rows = [{"company": c, "sub": getattr(c, "sub", None), "active": c.is_subscription_active(), "users": c.users.count()} for c in companies]
+    company_rows = []
+    for company in companies:
+        sub = getattr(company, "sub", None)
+        company_rows.append({
+            "company": company,
+            "sub": sub,
+            "active": company.is_subscription_active(),
+            "users": company.users.count(),
+            "due_at": sub.due_at if sub else None,
+            "due_state": sub.due_state if sub else "none",
+        })
     cutoff = timezone.now() - timezone.timedelta(minutes=5)
     online_users = UserProfile.objects.filter(last_seen__gte=cutoff).select_related("user", "company").order_by("-last_seen")
     return render(request, "inventory/platform_admin.html", {"stats": stats, "pending_subs": pending_subs, "company_rows": company_rows, "online_users": online_users})
